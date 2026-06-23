@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Long-Read Sequencing Variant Report — Synthetic Demo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; line-height: 1.5; }
+
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: white; padding: 28px 40px; }
+  .header h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .header .subtitle { font-size: 13px; color: #a0aec0; }
+
+  .nav { background: #16213e; padding: 0 40px; display: flex; gap: 0; border-bottom: 2px solid #0f3460; position: sticky; top: 0; z-index: 100; }
+  .nav button { background: none; border: none; color: #a0aec0; padding: 12px 20px; font-size: 13px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+  .nav button:hover { color: white; }
+  .nav button.active { color: #e94560; border-bottom-color: #e94560; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 40px; }
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .card { background: white; border-radius: 10px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #1a1a2e; }
+  .card h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #333; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); text-align: center; }
+  .stat-card .number { font-size: 32px; font-weight: 700; color: #1a1a2e; }
+  .stat-card .label { font-size: 12px; color: #718096; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card.alert { border-left: 4px solid #e94560; }
+  .stat-card.warning { border-left: 4px solid #f59e0b; }
+  .stat-card.info { border-left: 4px solid #3b82f6; }
+  .stat-card.success { border-left: 4px solid #10b981; }
+
+  .clinical-box { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
+  .clinical-box.critical { background: #fee2e2; border-color: #e94560; }
+  .clinical-box.info { background: #eff6ff; border-color: #3b82f6; }
+  .clinical-box h3 { color: #92400e; font-size: 14px; margin-bottom: 8px; }
+  .clinical-box.critical h3 { color: #991b1b; }
+  .clinical-box.info h3 { color: #1e40af; }
+  .clinical-box p, .clinical-box li { font-size: 13px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { background: #f7f8fa; padding: 10px 12px; text-align: left; font-weight: 600; color: #4a5568; border-bottom: 2px solid #e2e8f0; cursor: pointer; white-space: nowrap; user-select: none; }
+  thead th:hover { background: #edf2f7; }
+  thead th .sort-arrow { margin-left: 4px; color: #a0aec0; }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  tbody tr:hover { background: #f7fafc; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge.high { background: #fee2e2; color: #991b1b; }
+  .badge.moderate { background: #fef3c7; color: #92400e; }
+  .badge.low { background: #d1fae5; color: #065f46; }
+  .badge.modifier { background: #e5e7eb; color: #4b5563; }
+  .badge.tier1 { background: #e94560; color: white; }
+  .badge.tier2 { background: #3b82f6; color: white; }
+  .badge.pathogenic { background: #991b1b; color: white; }
+  .badge.likely-path { background: #dc2626; color: white; }
+  .badge.vus { background: #f59e0b; color: white; }
+  .badge.benign { background: #10b981; color: white; }
+  .badge.het { background: #dbeafe; color: #1e40af; }
+  .badge.hom { background: #fce7f3; color: #9d174d; }
+  /* TRGT status badges */
+  .badge.status-pathogenic  { background: #991b1b; color: white; }
+  .badge.status-intermediate{ background: #f59e0b; color: white; }
+  .badge.status-risk        { background: #f59e0b; color: white; }
+  .badge.status-normal      { background: #10b981; color: white; }
+  .badge.status-unknown     { background: #6b7280; color: white; }
+
+  /* Repeat expansion locus card */
+  .repeat-card { border:1px solid #e5e7eb; border-radius:8px; padding:14px 16px; margin-bottom:10px; background:white; }
+  .repeat-card.status-pathogenic  { border-left:4px solid #991b1b; background:#fef2f2; }
+  .repeat-card.status-intermediate,
+  .repeat-card.status-risk        { border-left:4px solid #f59e0b; background:#fffbeb; }
+  .repeat-card.status-normal      { border-left:4px solid #10b981; }
+  .repeat-card.status-unknown     { border-left:4px solid #6b7280; }
+  .repeat-card .head { display:flex; align-items:center; gap:12px; cursor:pointer; }
+  .repeat-card .trid { font-weight:600; font-size:15px; }
+  .repeat-card .metric { color:#4a5568; font-size:13px; }
+  .repeat-card .metric strong { color:#1a1a2e; }
+  .repeat-card .body { display:none; margin-top:12px; padding-top:12px; border-top:1px solid #e5e7eb; }
+  .repeat-card.expanded .body { display:block; }
+  .repeat-card .body svg { max-width:100%; height:auto; }
+  .repeat-card .toggle { margin-left:auto; color:#718096; font-size:12px; }
+  .repeat-card.expanded .toggle::before { content:'▼ '; }
+  .repeat-card:not(.expanded) .toggle::before { content:'▶ '; }
+
+  .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filter-bar input, .filter-bar select { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; }
+  .filter-bar input[type="text"] { min-width: 200px; }
+  .filter-bar input[type="checkbox"] { min-width: 0; margin-right: 4px; vertical-align: middle; }
+  .filter-bar label { font-size: 12px; color: #4a5568; font-weight: 500; }
+  /* Per-column filter row (added under each table header) */
+  tr.col-filter-row th { padding: 4px 6px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+  tr.col-filter-row input { width: 100%; padding: 3px 6px; font-size: 11px; font-weight: normal; border: 1px solid #d1d5db; border-radius: 4px; }
+  tr.col-filter-row input::placeholder { color: #9ca3af; font-style: italic; }
+
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .chart-container { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .chart-container canvas { max-height: 300px; }
+
+  .zygosity { font-size: 11px; font-weight: 600; }
+
+  .disclaimer { background: #f7f8fa; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-top: 24px; font-size: 12px; color: #718096; }
+
+  .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .print-only { display: none; }
+  @media print {
+    .nav, .filter-bar, .no-print { display: none !important; }
+    .section { display: block !important; page-break-inside: avoid; }
+    .print-only { display: block; }
+    body { background: white; }
+    .header { background: #1a1a2e !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  @media (max-width: 768px) {
+    .chart-row { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Long-Read Sequencing Variant Report</h1>
+  <div class="subtitle">Synthetic demo dataset &nbsp;|&nbsp; Genome build: GRCh38</div>
+</div>
+
+<div style="background:#fffbeb; border-top:1px solid #f6e05e; border-bottom:1px solid #f6e05e; color:#744210; padding:10px 16px; font-size:13px; text-align:center; line-height:1.5;">⚠️ <strong>Synthetic demo data.</strong> Every variant, structural variant, and repeat genotype shown here is randomly generated for demonstration — <strong>not from any real person.</strong> Replace the data files with your own to use it for real analysis.</div>
+<div class="nav no-print">
+  <button class="active" onclick="showSection('clinvar')">ClinVar Pathogenic</button>
+  <button onclick="showSection('all_variants')">All Variants (Full Genome)</button>
+  <button onclick="showSection('all_svs')">All SVs (Full Genome)</button>
+  <button onclick="showSection('repeats')">Repeat Expansions (TRGT)</button>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════════════ CLINVAR PATHOGENIC ═══════════════════════════ -->
+<div id="clinvar" class="section active">
+  <div class="card">
+    <h2>ClinVar Pathogenic / Likely Pathogenic (8)</h2>
+    <p style="font-size:13px; color:#718096; margin-bottom:12px;">Variants carrying pathogenic or likely-pathogenic assertions in ClinVar, reported genome-wide across all genes and conditions.</p>
+    <details style="margin:0 0 16px; font-size:12.5px; color:#4a5568;">
+      <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Column guide — what each column means</summary>
+      <dl style="margin:10px 0 0; display:grid; grid-template-columns:max-content 1fr; gap:5px 14px;">
+        <dt style="font-weight:600; color:#2d3748;">Gene</dt><dd style="margin:0;">Gene symbol the variant overlaps (VEP).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position on GRCh38.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Protein</dt><dd style="margin:0;">Protein-level change in HGVS notation (p.…), for coding variants.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Consequence</dt><dd style="margin:0;">Predicted functional effect (VEP / Sequence Ontology term, e.g. missense_variant, stop_gained).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Impact</dt><dd style="margin:0;">VEP severity class: HIGH / MODERATE / LOW / MODIFIER.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Zygosity</dt><dd style="margin:0;">This sample's genotype: HET = one alt copy, HOM = two alt copies (0/0 = reference, ./. = no-call).</dd>
+        <dt style="font-weight:600; color:#2d3748;">ClinVar</dt><dd style="margin:0;">ClinVar clinical-significance assertion (here filtered to pathogenic / likely-pathogenic).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Disease</dt><dd style="margin:0;">ClinVar-reported condition(s) associated with the variant (CLNDN field).</dd>
+        <dt style="font-weight:600; color:#2d3748;">CADD</dt><dd style="margin:0;">CADD Phred deleteriousness score (~20 ≈ top 1% most deleterious, ≥30 ≈ top 0.1%).</dd>
+        <dt style="font-weight:600; color:#2d3748;">SpliceAI</dt><dd style="margin:0;">Maximum SpliceAI delta score, 0–1; ≥0.5 likely splice-altering.</dd>
+        <dt style="font-weight:600; color:#2d3748;">gnomAD</dt><dd style="margin:0;">Population allele frequency (gnomAD genomes). Blank ≈ not observed (novel / very rare).</dd>
+        <dt style="font-weight:600; color:#2d3748;">dbSNP</dt><dd style="margin:0;">Known variant identifier (dbSNP rsID). Blank = not previously catalogued.</dd>
+      </dl>
+    </details>
+    <div class="filter-bar">
+      <input type="text" id="clinvar-search" placeholder="Search gene, disease, variant..." oninput="filterTable('clinvar-table', this.value)">
+      <label>Impact: <select onchange="filterTableByImpact('clinvar-table', this.value)">
+        <option value="">All</option><option value="HIGH">HIGH</option><option value="MODERATE">MODERATE</option><option value="LOW">LOW</option>
+      </select></label>
+      <label><input type="checkbox" onchange="toggleHideRef('clinvar-table', this.checked)"> Hide 0/0 and ./.</label>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="clinvar-table">
+        <thead><tr>
+          <th onclick="sortTable('clinvar-table',0)">Gene <span class="sort-arrow">↕</span></th>
+          <th onclick="sortTable('clinvar-table',1)">Location</th>
+          <th onclick="sortTable('clinvar-table',2)">Protein</th>
+          <th onclick="sortTable('clinvar-table',3)">Consequence</th>
+          <th onclick="sortTable('clinvar-table',4)">Impact</th>
+          <th onclick="sortTable('clinvar-table',5)">Zygosity</th>
+          <th onclick="sortTable('clinvar-table',6)">ClinVar</th>
+          <th onclick="sortTable('clinvar-table',7)">Disease</th>
+          <th onclick="sortTable('clinvar-table',8)">CADD</th>
+          <th onclick="sortTable('clinvar-table',9)">SpliceAI</th>
+          <th onclick="sortTable('clinvar-table',10)">gnomAD</th>
+          <th onclick="sortTable('clinvar-table',11)">dbSNP</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ ALL VARIANTS (FULL GENOME) ═══════════════════════════ -->
+<!--
+  Browser-side SQL query interface over the full annotated VCF (~4-5M variants
+  per WGS). Backed by DuckDB-WASM + a Parquet sidecar (variants.parquet by
+  default, in the same folder as this HTML). DuckDB range-fetches only the
+  row groups each query touches, so filters and sorts stay sub-second even at
+  whole-genome scale. Requires that this HTML is served over HTTP (e.g. via
+  the bundled serve_dashboard.sh) — file:// won't allow the range requests
+  the parquet reader needs.
+-->
+<div id="all_variants" class="section">
+  <div class="card">
+    <h2>All Annotated Variants — Full Genome (<span id="av-total">…</span>)</h2>
+    <p style="font-size:13px; color:#718096; margin-bottom:12px;">
+      Every record from the VEP-annotated VCF. This view runs SQL queries against a
+      Parquet sidecar in the browser using DuckDB-WASM — no server, no full data load. Type to filter; click a
+      column header to sort. Filters AND together. Use this to look up specific genes, positions, or HGVS notations,
+      or to browse the entire genome interactively without the curated filters.
+    </p>
+
+    <div class="clinical-box info" style="font-size:12.5px; line-height:1.55; margin-bottom:12px;">
+      <strong>Why do <code>0/0</code> and <code>./.</code> rows appear?</strong>
+      This table holds the caller's <em>complete</em> output, not just confident variant calls. A caller such as
+      DeepVariant emits a record at every site it evaluated and tags each with a FILTER:
+      <ul style="margin:6px 0 6px 18px; padding:0;">
+        <li><strong><code>PASS</code></strong> — a real variant in this sample (genotype <code>1/1</code>, <code>0/1</code>, <code>1|0</code>, <code>1/2</code>, …).</li>
+        <li><strong><code>RefCall</code> → genotype <code>0/0</code></strong> — the site looked variant-like (e.g. a known polymorphic position or a few mismatched reads), but the caller decided this sample is <em>homozygous reference</em>. No alt allele here.</li>
+        <li><strong><code>NoCall</code> → genotype <code>./.</code></strong> — too little or too ambiguous evidence to make a confident genotype.</li>
+      </ul>
+      <code>0/0</code> and <code>./.</code> rows are therefore <em>not</em> variants carried by this individual — they're sites the caller looked at and ruled out or couldn't resolve.<span id="av-gt-breakdown"></span>
+      Tick <strong>“Hide 0/0 and ./.”</strong> above to drop them and see only genotypes with an alternate allele. (The Zygosity → “HET or HOM” option does the same thing.)
+    </div>
+
+    <details style="margin:0 0 16px; font-size:12.5px; color:#4a5568;">
+      <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Column guide — what each column means</summary>
+      <dl style="margin:10px 0 0; display:grid; grid-template-columns:max-content 1fr; gap:5px 14px;">
+        <dt style="font-weight:600; color:#2d3748;">Gene</dt><dd style="margin:0;">Gene symbol the variant overlaps (VEP). Blank for intergenic positions.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position on GRCh38.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Protein</dt><dd style="margin:0;">Protein-level change in HGVS notation (p.…), for coding variants.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Consequence</dt><dd style="margin:0;">Predicted functional effect (VEP / Sequence Ontology term, e.g. missense_variant, stop_gained, intron_variant).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Impact</dt><dd style="margin:0;">VEP severity class: HIGH (likely disruptive, e.g. loss-of-function), MODERATE (e.g. missense), LOW (e.g. synonymous), MODIFIER (non-coding / intronic).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Zygosity</dt><dd style="margin:0;">This sample's genotype: HET = one alt copy (0/1), HOM = two alt copies (1/1); also the reference (0/0) and no-call (./.) states described above.</dd>
+        <dt style="font-weight:600; color:#2d3748;">CADD</dt><dd style="margin:0;">CADD Phred deleteriousness score. ~10 ≈ top 10% most deleterious genome-wide, ~20 ≈ top 1%, ≥30 ≈ top 0.1%.</dd>
+        <dt style="font-weight:600; color:#2d3748;">REVEL</dt><dd style="margin:0;">Ensemble missense-pathogenicity score, 0–1; higher = more likely pathogenic (≥0.5 is a common flag). Missense variants only.</dd>
+        <dt style="font-weight:600; color:#2d3748;">SpliceAI</dt><dd style="margin:0;">Maximum SpliceAI delta score, 0–1, for predicted splice disruption. ≥0.2 possible, ≥0.5 likely splice-altering.</dd>
+        <dt style="font-weight:600; color:#2d3748;">SIFT</dt><dd style="margin:0;">SIFT missense prediction: “deleterious” vs “tolerated” (lower score = more damaging).</dd>
+        <dt style="font-weight:600; color:#2d3748;">PolyPhen</dt><dd style="margin:0;">PolyPhen-2 missense prediction: “probably/possibly damaging” vs “benign” (higher score = more damaging).</dd>
+        <dt style="font-weight:600; color:#2d3748;">gnomAD</dt><dd style="margin:0;">Population allele frequency (gnomAD genomes). Blank ≈ not observed in gnomAD (novel / very rare).</dd>
+        <dt style="font-weight:600; color:#2d3748;">ClinVar</dt><dd style="margin:0;">ClinVar clinical-significance assertion (e.g. pathogenic, likely_pathogenic, benign, conflicting), where the position is in ClinVar.</dd>
+        <dt style="font-weight:600; color:#2d3748;">dbSNP / IDs</dt><dd style="margin:0;">Known variant identifiers (dbSNP rsIDs and other database IDs). Blank = not previously catalogued.</dd>
+      </dl>
+    </details>
+    <div id="av-status" class="clinical-box info" style="display:none;">
+      <h3 id="av-status-title">Loading the data layer…</h3>
+      <p id="av-status-body"></p>
+    </div>
+    <div id="av-controls" style="display:none;">
+      <div class="filter-bar" style="margin-bottom:8px;">
+        <input type="text" id="av-search" placeholder="Search anywhere — gene, HGVS, rsID, consequence, ClinVar…" style="flex:1; min-width:300px;">
+        <button onclick="avResetFilters()" style="padding:6px 12px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer; font-size:13px;">Reset filters</button>
+        <button onclick="avExportTSV()" style="padding:6px 12px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer; font-size:13px;" title="Export the current filtered view to a TSV file (capped at 100,000 rows)">Export current view (TSV)</button>
+      </div>
+      <div class="filter-bar" style="margin-bottom:8px; gap:8px;">
+        <label>Gene: <input type="text" id="av-f-gene" placeholder="e.g. BRCA1" style="width:110px;"></label>
+        <label>Chrom: <input type="text" id="av-f-chrom" placeholder="e.g. chr21" style="width:80px;"></label>
+        <label>Pos ≥ <input type="text" id="av-f-pos-min" placeholder="start" style="width:100px;"></label>
+        <label>Pos ≤ <input type="text" id="av-f-pos-max" placeholder="end" style="width:100px;"></label>
+        <label>Impact:
+          <select id="av-f-impact">
+            <option value="">Any</option>
+            <option>HIGH</option>
+            <option>MODERATE</option>
+            <option>LOW</option>
+            <option>MODIFIER</option>
+          </select>
+        </label>
+        <label>Consequence: <input type="text" id="av-f-csq" placeholder="e.g. missense" style="width:160px;"></label>
+      </div>
+      <div class="filter-bar" style="margin-bottom:8px; gap:8px;">
+        <label>gnomAD AF ≤ <input type="text" id="av-f-af-max" placeholder="0.01" style="width:90px;"></label>
+        <label>CADD ≥ <input type="text" id="av-f-cadd-min" placeholder="20" style="width:70px;"></label>
+        <label>REVEL ≥ <input type="text" id="av-f-revel-min" placeholder="0.5" style="width:70px;"></label>
+        <label>SpliceAI ≥ <input type="text" id="av-f-sai-min" placeholder="0.5" style="width:70px;"></label>
+        <label>Zygosity:
+          <select id="av-f-gt">
+            <option value="">Any</option>
+            <option value="HET">HET (0/1)</option>
+            <option value="HOM">HOM (1/1)</option>
+            <option value="NONREF">HET or HOM (exclude 0/0, ./.)</option>
+          </select>
+        </label>
+        <label>ClinVar: <input type="text" id="av-f-clin" placeholder="e.g. pathogenic" style="width:140px;"></label>
+        <label title="Hide homozygous-reference (0/0) and no-call (./.) records — see the note under the table for why these appear"><input type="checkbox" id="av-f-hide-ref"> Hide 0/0 and ./. (ref &amp; no-call)</label>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; color:#4a5568;">
+        <span id="av-result-summary">—</span>
+        <span>
+          <button id="av-prev" onclick="avPage(-1)" style="padding:4px 10px; border:1px solid #d1d5db; background:white; border-radius:4px; cursor:pointer;">‹ Prev</button>
+          <span id="av-page-info" style="margin:0 8px;">page 1</span>
+          <button id="av-next" onclick="avPage(1)" style="padding:4px 10px; border:1px solid #d1d5db; background:white; border-radius:4px; cursor:pointer;">Next ›</button>
+          &nbsp;&nbsp;Rows/page:
+          <select id="av-page-size" style="padding:3px 6px;">
+            <option>50</option><option>100</option><option>200</option><option>500</option>
+          </select>
+        </span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="av-table">
+          <thead><tr>
+            <th data-col="gene"        onclick="avSort('gene')">Gene <span class="sort-arrow">↕</span></th>
+            <th data-col="chrom,pos"   onclick="avSort('chrom,pos')">Location</th>
+            <th data-col="hgvsp"       onclick="avSort('hgvsp')">Protein</th>
+            <th data-col="consequence" onclick="avSort('consequence')">Consequence</th>
+            <th data-col="impact"      onclick="avSort('impact')">Impact</th>
+            <th data-col="gt"          onclick="avSort('gt')">Zygosity</th>
+            <th data-col="cadd"        onclick="avSort('cadd')">CADD</th>
+            <th data-col="revel"       onclick="avSort('revel')">REVEL</th>
+            <th data-col="spliceai"    onclick="avSort('spliceai')">SpliceAI</th>
+            <th data-col="sift"        onclick="avSort('sift')">SIFT</th>
+            <th data-col="polyphen"    onclick="avSort('polyphen')">PolyPhen</th>
+            <th data-col="gnomadg"     onclick="avSort('gnomadg')">gnomAD</th>
+            <th data-col="clinsig"     onclick="avSort('clinsig')">ClinVar</th>
+            <th data-col="existing"    onclick="avSort('existing')">dbSNP / IDs</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ═══════════════════════════ REPEAT EXPANSIONS (TRGT) ═══════════════════════════ -->
+<!--
+  TRGT (PacBio's Tandem Repeat Genotyping Tool) results. Small dataset (~12-100
+  loci) so we embed it inline rather than going through Parquet. The clinical
+  payoff is the per-locus waterfall plot — for ALS this is the only reliable
+  way to confirm a C9orf72 expansion from WGS data. Loci are grouped by
+  pathogenic threshold status and rendered as click-to-expand cards that
+  show the trvz SVG inline.
+-->
+<div id="repeats" class="section">
+  <div class="card">
+    <h2>Tandem Repeat Expansions — TRGT (<span id="trgt-total">6</span> loci)</h2>
+    <p style="font-size:13px; color:#718096; margin-bottom:16px;">
+      Repeat-locus genotypes from PacBio TRGT (step 03b). Unlike SNVs and SVs, tandem repeat expansions
+      (e.g. C9orf72, HTT, the SCA loci) cannot be reliably called by standard small-variant or SV callers;
+      TRGT is the only reliable caller for these loci. Click a row to view the waterfall plot of
+      individual reads at that locus.
+    </p>
+    <details style="margin:0 0 16px; font-size:12.5px; color:#4a5568;">
+      <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Field guide — what each value on a locus card means</summary>
+      <dl style="margin:10px 0 0; display:grid; grid-template-columns:max-content 1fr; gap:5px 14px;">
+        <dt style="font-weight:600; color:#2d3748;">Locus</dt><dd style="margin:0;">Tandem-repeat locus ID (TRID) from the TRGT repeat catalog.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Status badge</dt><dd style="margin:0;">Threshold classification: pathogenic, intermediate / risk, normal, or “no threshold defined” (locus genotyped but no clinical cutoff is catalogued).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position of the repeat on GRCh38.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Motif</dt><dd style="margin:0;">Repeat unit sequence(s) genotyped at this locus (e.g. GGGGCC for C9orf72).</dd>
+        <dt style="font-weight:600; color:#2d3748;">GT</dt><dd style="margin:0;">Genotype — which catalogued alleles the two haplotypes correspond to.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Repeats</dt><dd style="margin:0;">Motif copy count per allele (MC) — the actual repeat sizes; this is what thresholds are applied to.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Depth</dt><dd style="margin:0;">Number of spanning reads supporting each allele (SD); more reads = more reliable.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Allele lengths (bp)</dt><dd style="margin:0;">Total length of each repeat allele in base pairs (AL).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Allele purity</dt><dd style="margin:0;">Fraction of each allele matching the canonical motif (AP), 0–1; lower = interrupted / impure repeat.</dd>
+        <dt style="font-weight:600; color:#2d3748;">CpG methylation</dt><dd style="margin:0;">Mean CpG methylation per allele (AM), when available — relevant for loci like C9orf72 and FMR1.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Confidence interval</dt><dd style="margin:0;">Repeat-length confidence interval per allele (ALLR).</dd>
+      </dl>
+    </details>
+
+    <div class="stats-row" style="margin-bottom:16px;">
+      <div class="stat-card alert">
+        <div class="number" id="trgt-stat-path">1</div>
+        <div class="label">Pathogenic</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="number" id="trgt-stat-int">1</div>
+        <div class="label">Intermediate / Risk</div>
+      </div>
+      <div class="stat-card success">
+        <div class="number" id="trgt-stat-norm">2</div>
+        <div class="label">Normal</div>
+      </div>
+      <div class="stat-card info">
+        <div class="number" id="trgt-stat-unk">2</div>
+        <div class="label">No threshold defined</div>
+      </div>
+    </div>
+
+    <div class="filter-bar" style="margin-bottom:12px;">
+      <input type="text" id="trgt-search" placeholder="Search locus, motif, status…" oninput="renderRepeatList()">
+      <label>Show:
+        <select id="trgt-filter-status" onchange="renderRepeatList()">
+          <option value="">All</option>
+          <option value="flagged">Flagged only (pathogenic / intermediate / risk)</option>
+          <option value="pathogenic">Pathogenic only</option>
+          <option value="normal">Normal only</option>
+          <option value="unknown">Unclassified only</option>
+        </select>
+      </label>
+      <label>Sort:
+        <select id="trgt-sort" onchange="renderRepeatList()">
+          <option value="status">By status (severity)</option>
+          <option value="trid">By locus name</option>
+          <option value="max_mc">By max repeat count</option>
+          <option value="chrom_pos">By chromosomal position</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="trgt-empty" style="display:none; padding:24px; text-align:center; color:#718096;">
+      No TRGT data was loaded. Re-run the dashboard generator with <code>--trgt-vcf=&lt;path&gt;</code>
+      (or place the TRGT VCF at <code>${results}/variants/repeat/${sample}.trgt.vcf.gz</code>).
+    </div>
+
+    <div id="trgt-list"></div>
+
+    <div class="disclaimer" style="margin-top:16px;">
+      <strong>Clinical thresholds applied:</strong>
+      C9orf72 &gt;30 = pathogenic, 24–30 = intermediate (ALS/FTD risk).
+      ATXN2 ≥34 pathogenic, 27–33 = ALS risk factor.
+      LRP12 ≥60 = pathogenic (ALS28).
+      Plus Huntington, SCA1/2/3/8/17/36, NIID, Fragile X for differential diagnosis.
+      Thresholds match step 03b's threshold table.
+      <strong>All pathogenic findings must be confirmed orthogonally (Southern blot or repeat-primed PCR) before clinical action.</strong>
+    </div>
+  </div>
+</div>
+<!-- ═══════════════════════════ ALL SVs (FULL GENOME) ═══════════════════════════ -->
+<!--
+  Browser-side SQL over EVERY structural variant called by PBSV, with no
+  gene-region filtering. Same architecture as the All-Variants tab: DuckDB-WASM
+  + Parquet sidecar (svs.parquet by default). SV-specific filters
+  (SVTYPE, size range, precise/imprecise, FILTER=PASS) replace the SNV-specific
+  ones. Genotype + read-support columns help triage candidate calls.
+-->
+<div id="all_svs" class="section">
+  <div class="card">
+    <h2>All Structural Variants — Full Genome (<span id="sv-total">…</span>)</h2>
+    <p style="font-size:13px; color:#718096; margin-bottom:16px;">
+      Every PBSV structural-variant call (DEL, DUP, INV, INS, BND, CNV). Same in-browser
+      DuckDB engine as the All-Variants tab. Use the type/size filters to narrow down — most SVs in a WGS are
+      common, short, and non-coding. Note: gene/consequence columns are populated only when step 06 ran VEP on
+      the SV VCF; un-annotated SVs still appear and are searchable by position, type, and size.
+    </p>
+    <details style="margin:0 0 16px; font-size:12.5px; color:#4a5568;">
+      <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Column guide — what each column means</summary>
+      <dl style="margin:10px 0 0; display:grid; grid-template-columns:max-content 1fr; gap:5px 14px;">
+        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and span (start–end) of the structural variant on GRCh38.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Type</dt><dd style="margin:0;">SV class: DEL (deletion), DUP (duplication), INV (inversion), INS (insertion), BND (breakend / translocation), CNV (copy-number).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Size (bp)</dt><dd style="margin:0;">Length of the structural variant in base pairs.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Gene</dt><dd style="margin:0;">Gene the SV overlaps (only populated when VEP annotated the SV VCF).</dd>
+        <dt style="font-weight:600; color:#2d3748;">Consequence</dt><dd style="margin:0;">Predicted functional effect of the SV (VEP term), where annotated.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Impact</dt><dd style="margin:0;">VEP severity class: HIGH / MODERATE / LOW / MODIFIER, where annotated.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Zygosity</dt><dd style="margin:0;">This sample's genotype: HET = one alt copy, HOM = two alt copies (0/0 = reference, ./. = no-call).</dd>
+        <dt style="font-weight:600; color:#2d3748;">DP</dt><dd style="margin:0;">Total read depth (read support) at the SV locus.</dd>
+        <dt style="font-weight:600; color:#2d3748;">AD (ref,alt)</dt><dd style="margin:0;">Allelic depth — reads supporting the reference allele vs the alternate (SV) allele.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Qual</dt><dd style="margin:0;">PBSV variant quality score; higher = more confident.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Filter</dt><dd style="margin:0;">Caller FILTER status; PASS = passed PBSV's internal filters.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Precise</dt><dd style="margin:0;">Whether breakpoints are base-pair precise (✓) or approximate / imprecise (~).</dd>
+        <dt style="font-weight:600; color:#2d3748;">ID</dt><dd style="margin:0;">PBSV's internal structural-variant identifier.</dd>
+      </dl>
+    </details>
+    <div id="sv-status" class="clinical-box info" style="display:none;">
+      <h3 id="sv-status-title">Loading the SV data layer…</h3>
+      <p id="sv-status-body"></p>
+    </div>
+    <div id="sv-controls" style="display:none;">
+      <div class="filter-bar" style="margin-bottom:8px;">
+        <input type="text" id="sv-search" placeholder="Search anywhere — gene, ID, consequence, chr:pos…" style="flex:1; min-width:300px;">
+        <button onclick="svResetFilters()" style="padding:6px 12px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer; font-size:13px;">Reset filters</button>
+        <button onclick="svExportTSV()" style="padding:6px 12px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer; font-size:13px;" title="Export the current filtered view to TSV (capped at 100,000 rows)">Export current view (TSV)</button>
+      </div>
+      <div class="filter-bar" style="margin-bottom:8px; gap:8px;">
+        <label>Type:
+          <select id="sv-f-type">
+            <option value="">Any</option>
+            <option>DEL</option>
+            <option>DUP</option>
+            <option>INV</option>
+            <option>INS</option>
+            <option>BND</option>
+            <option>CNV</option>
+          </select>
+        </label>
+        <label>Size ≥ <input type="text" id="sv-f-size-min" placeholder="50" style="width:80px;"> bp</label>
+        <label>Size ≤ <input type="text" id="sv-f-size-max" placeholder="10000000" style="width:90px;"> bp</label>
+        <label>Chrom: <input type="text" id="sv-f-chrom" placeholder="e.g. chr21" style="width:80px;"></label>
+        <label>Pos ≥ <input type="text" id="sv-f-pos-min" placeholder="start" style="width:100px;"></label>
+        <label>Pos ≤ <input type="text" id="sv-f-pos-max" placeholder="end" style="width:100px;"></label>
+      </div>
+      <div class="filter-bar" style="margin-bottom:8px; gap:8px;">
+        <label>Gene: <input type="text" id="sv-f-gene" placeholder="e.g. BRCA1" style="width:110px;"></label>
+        <label>Impact:
+          <select id="sv-f-impact">
+            <option value="">Any</option>
+            <option>HIGH</option>
+            <option>MODERATE</option>
+            <option>LOW</option>
+            <option>MODIFIER</option>
+          </select>
+        </label>
+        <label>Zygosity:
+          <select id="sv-f-gt">
+            <option value="">Any</option>
+            <option value="HET">HET (0/1)</option>
+            <option value="HOM">HOM (1/1)</option>
+            <option value="NONREF">HET or HOM (exclude 0/0, ./.)</option>
+          </select>
+        </label>
+        <label>Min depth (DP) ≥ <input type="text" id="sv-f-dp-min" placeholder="5" style="width:60px;"></label>
+        <label><input type="checkbox" id="sv-f-pass-only"> PASS only</label>
+        <label><input type="checkbox" id="sv-f-precise-only"> Precise only</label>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; color:#4a5568;">
+        <span id="sv-result-summary">—</span>
+        <span>
+          <button id="sv-prev" onclick="svPage(-1)" style="padding:4px 10px; border:1px solid #d1d5db; background:white; border-radius:4px; cursor:pointer;">‹ Prev</button>
+          <span id="sv-page-info" style="margin:0 8px;">page 1</span>
+          <button id="sv-next" onclick="svPage(1)" style="padding:4px 10px; border:1px solid #d1d5db; background:white; border-radius:4px; cursor:pointer;">Next ›</button>
+          &nbsp;&nbsp;Rows/page:
+          <select id="sv-page-size" style="padding:3px 6px;">
+            <option>50</option><option>100</option><option>200</option><option>500</option>
+          </select>
+        </span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="sv-allgenome-table">
+          <thead><tr>
+            <th data-col="chrom,pos"   onclick="svSort('chrom,pos')">Location <span class="sort-arrow">↕</span></th>
+            <th data-col="svtype"      onclick="svSort('svtype')">Type</th>
+            <th data-col="svlen"       onclick="svSort('svlen')">Size (bp)</th>
+            <th data-col="gene"        onclick="svSort('gene')">Gene</th>
+            <th data-col="consequence" onclick="svSort('consequence')">Consequence</th>
+            <th data-col="impact"      onclick="svSort('impact')">Impact</th>
+            <th data-col="gt"          onclick="svSort('gt')">Zygosity</th>
+            <th data-col="dp"          onclick="svSort('dp')">DP</th>
+            <th data-col="ad"          onclick="svSort('ad')">AD (ref,alt)</th>
+            <th data-col="qual"        onclick="svSort('qual')">Qual</th>
+            <th data-col="filter"      onclick="svSort('filter')">Filter</th>
+            <th data-col="precise"     onclick="svSort('precise')">Precise</th>
+            <th data-col="vid"         onclick="svSort('vid')">ID</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- container -->
+<script>
+// ═══════════════════════════ DATA ═══════════════════════════
+const DATA = {"sample":"DEMO","date":"","parquet_size_mb":249.5,"sv_parquet_size_mb":8.9,"trgt_loci":[{"trid":"HTT","chrom":"chr4","pos":3074877,"end":3075420,"motifs":"CAG","gt":"1/2","al":[51,543],"allr":"51-53, 543-548","sd":[25,17],"mc":[17,181],"ms":"CAG","ap":[0.98,0.92],"am":[],"max_mc":181,"status":"pathogenic","status_label":"Demo: expanded (CAG)","status_category":"pathogenic"},{"trid":"C9orf72","chrom":"chr9","pos":27573484,"end":27575962,"motifs":"GGGGCC","gt":"1/2","al":[96,2478],"allr":"96-98, 2478-2483","sd":[10,9],"mc":[16,413],"ms":"GGGGCC","ap":[0.97,0.95],"am":[],"max_mc":413,"status":"intermediate","status_label":"Demo: intermediate","status_category":"intermediate"},{"trid":"FMR1","chrom":"chrX","pos":147912050,"end":147912086,"motifs":"CGG","gt":"1/2","al":[21,36],"allr":"21-23, 36-41","sd":[11,20],"mc":[7,12],"ms":"CGG","ap":[0.93,0.93],"am":[],"max_mc":12,"status":"normal","status_label":"","status_category":"normal"},{"trid":"ATXN2","chrom":"chr12","pos":111598950,"end":111598998,"motifs":"CAG","gt":"1/2","al":[48,30],"allr":"48-50, 30-35","sd":[19,19],"mc":[16,10],"ms":"CAG","ap":[0.92,0.85],"am":[],"max_mc":16,"status":"normal","status_label":"","status_category":"normal"},{"trid":"DMPK","chrom":"chr19","pos":45770205,"end":45770277,"motifs":"CTG","gt":"1/2","al":[21,72],"allr":"21-23, 72-77","sd":[13,25],"mc":[7,24],"ms":"CTG","ap":[0.97,0.83],"am":[],"max_mc":24,"status":"unknown","status_label":"","status_category":"unknown"},{"trid":"FXN","chrom":"chr9","pos":69037286,"end":69037337,"motifs":"GAA","gt":"1/2","al":[51,39],"allr":"51-53, 39-44","sd":[25,15],"mc":[17,13],"ms":"GAA","ap":[0.97,0.97],"am":[],"max_mc":17,"status":"unknown","status_label":"","status_category":"unknown"}],"clinvar_variants":[{"gene":"BRCA1","chrom":"chr1","pos":1000000,"hgvsp":"p.Gly200Asp","consequence":"missense_variant","impact":"MODERATE","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":31.1,"spliceai":0.1,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000000"},{"gene":"BRCA2","chrom":"chr2","pos":1137311,"hgvsp":"p.Arg107Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":30.2,"spliceai":0.36,"spliceai_source":"demo","gnomadg":8.7e-05,"existing":"rs9000111"},{"gene":"CFTR","chrom":"chr3","pos":1274622,"hgvsp":"p.Gly210Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":20.4,"spliceai":0.09,"spliceai_source":"demo","gnomadg":0.000505,"existing":"rs9000222"},{"gene":"TP53","chrom":"chr4","pos":1411933,"hgvsp":"p.Arg121Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":30.7,"spliceai":0.28,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000333"},{"gene":"MLH1","chrom":"chr5","pos":1549244,"hgvsp":"p.Gly220Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":26.7,"spliceai":0.11,"spliceai_source":"demo","gnomadg":0.000869,"existing":"rs9000444"},{"gene":"LDLR","chrom":"chr6","pos":1686555,"hgvsp":"p.Arg135Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"likely_pathogenic","clndn":"Synthetic_demo_condition","cadd":25.1,"spliceai":0.06,"spliceai_source":"demo","gnomadg":0.000957,"existing":"rs9000555"},{"gene":"HFE","chrom":"chr7","pos":1823866,"hgvsp":"p.Gly230Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":21.4,"spliceai":0.04,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000666"},{"gene":"PAH","chrom":"chr8","pos":1961177,"hgvsp":"p.Arg149Ter","consequence":"stop_gained","impact":"HIGH","gt":"1/1","clinsig":"likely_pathogenic","clndn":"Synthetic_demo_condition","cadd":32.1,"spliceai":0.29,"spliceai_source":"demo","gnomadg":0.000536,"existing":"rs9000777"}],"parquet_path":"variants.parquet","sv_parquet_path":"svs.parquet","trgt_plot_prefix":"longread_dashboard_assets/trgt/"};
+
+// ═══════════════════════════ NAVIGATION ═══════════════════════════
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  // Lazy-init the All-Variants and All-SVs tabs on first activation. Kept
+  // here (vs. a wrapper) so the original event.target behavior of this
+  // function isn't lost.
+  if (id === 'all_variants' && typeof AV_STATE !== 'undefined' &&
+      !AV_STATE.initialized && !AV_STATE.loading) {
+    avInit();
+  }
+  if (id === 'all_svs' && typeof SV_STATE !== 'undefined' &&
+      !SV_STATE.initialized && !SV_STATE.loading) {
+    svInit();
+  }
+}
+
+// ═══════════════════════════ HELPERS ═══════════════════════════
+function impactBadge(impact) {
+  const cls = {HIGH:'high',MODERATE:'moderate',LOW:'low',MODIFIER:'modifier'}[impact] || 'modifier';
+  return `<span class="badge ${cls}">${impact}</span>`;
+}
+function tierBadge(tier) {
+  if (!tier) return '';
+  return `<span class="badge ${tier === 'Tier 1' ? 'tier1' : 'tier2'}">${tier}</span>`;
+}
+function clinsigBadge(sig) {
+  if (!sig || sig === '-') return '-';
+  const s = sig.toLowerCase();
+  if (s.includes('pathogenic') && !s.includes('likely') && !s.includes('conflicting'))
+    return `<span class="badge pathogenic">${sig}</span>`;
+  if (s.includes('likely_pathogenic') || s.includes('likely pathogenic'))
+    return `<span class="badge likely-path">${sig}</span>`;
+  if (s.includes('uncertain') || s.includes('vus'))
+    return `<span class="badge vus">${sig}</span>`;
+  return sig;
+}
+function gtBadge(gt) {
+  if (!gt) return '-';
+  if (gt === '0/1' || gt === '0|1' || gt === '1|0') return `<span class="badge het">HET</span>`;
+  if (gt === '1/1' || gt === '1|1') return `<span class="badge hom">HOM</span>`;
+  return gt;
+}
+function fmtAF(af) {
+  if (af === null || af === undefined) return '-';
+  if (af === 0) return '0 (novel)';
+  if (af < 0.0001) return af.toExponential(1);
+  if (af < 0.01) return af.toFixed(4);
+  return af.toFixed(3);
+}
+function fmtScore(v) { return v !== null && v !== undefined ? v.toFixed(2) : '-'; }
+
+// Color-coded SpliceAI Δ-max: amber at ≥0.5 (high-precision), red at ≥0.8 (very high).
+// Also tags the source ("plugin"=06b precomputed, "nn"=06c neural net) as a tooltip.
+function fmtSpliceAI(v, src) {
+  if (v === null || v === undefined) return '-';
+  const formatted = v.toFixed(2);
+  const tip = src === 'plugin' ? 'SpliceAI (precomputed lookup, 06b)'
+           : src === 'nn'     ? 'SpliceAI (neural net, 06c)'
+           : 'SpliceAI';
+  let color = '';
+  if (v >= 0.8)      color = 'color:#dc2626;font-weight:600';        // red
+  else if (v >= 0.5) color = 'color:#d97706;font-weight:600';        // amber
+  else if (v >= 0.2) color = 'color:#525252';                        // neutral
+  return `<span style="${color}" title="${tip}">${formatted}</span>`;
+}
+
+// ═══════════════════════════ TABLE RENDERING ═══════════════════════════
+function renderAlsDbTable(tableId, variants) {
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  tbody.innerHTML = variants.map(v => `<tr>
+    <td><strong>${v.gene}</strong></td>
+    <td>${tierBadge(v.tier)}</td>
+    <td>${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos.toLocaleString()}</td>
+    <td class="truncate" title="${v.hgvsp}">${v.hgvsp || '-'}</td>
+    <td>${v.consequence}</td>
+    <td>${impactBadge(v.impact)}</td>
+    <td>${gtBadge(v.gt)}</td>
+    <td>${fmtScore(v.cadd)}</td>
+    <td>${fmtScore(v.revel)}</td>
+    <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
+    <td>${v.sift || '-'}</td>
+    <td>${v.polyphen || '-'}</td>
+    <td>${fmtAF(v.gnomadg)}</td>
+    <td>${clinsigBadge(v.clinsig)}</td>
+    <td>${v.als_db_sig || '-'}</td>
+    <td>${v.als_db_sources || '-'}</td>
+  </tr>`).join('');
+}
+
+function renderClinvarTable(variants) {
+  const tbody = document.querySelector('#clinvar-table tbody');
+  tbody.innerHTML = variants.map(v => `<tr>
+    <td><strong>${v.gene}</strong></td>
+    <td>${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos.toLocaleString()}</td>
+    <td class="truncate" title="${v.hgvsp}">${v.hgvsp || '-'}</td>
+    <td>${v.consequence}</td>
+    <td>${impactBadge(v.impact)}</td>
+    <td>${gtBadge(v.gt)}</td>
+    <td>${clinsigBadge(v.clinsig)}</td>
+    <td class="truncate" title="${v.clndn}">${v.clndn || '-'}</td>
+    <td>${fmtScore(v.cadd)}</td>
+    <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
+    <td>${fmtAF(v.gnomadg)}</td>
+    <td>${v.existing || '-'}</td>
+  </tr>`).join('');
+}
+
+function renderHighImpactTable(variants) {
+  const tbody = document.querySelector('#high-table tbody');
+  tbody.innerHTML = variants.map(v => `<tr>
+    <td><strong>${v.gene}</strong></td>
+    <td>${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos.toLocaleString()}</td>
+    <td class="truncate" title="${v.hgvsp}">${v.hgvsp || '-'}</td>
+    <td>${v.consequence}</td>
+    <td>${gtBadge(v.gt)}</td>
+    <td>${fmtScore(v.cadd)}</td>
+    <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
+    <td>${fmtAF(v.gnomadg)}</td>
+    <td>${clinsigBadge(v.clinsig)}</td>
+    <td>${v.existing || '-'}</td>
+  </tr>`).join('');
+
+  // Populate consequence filter
+  const csqs = [...new Set(variants.map(v => v.consequence))].sort();
+  const sel = document.getElementById('high-csq-filter');
+  csqs.forEach(c => { const o = document.createElement('option'); o.value = c; o.text = c; sel.add(o); });
+}
+
+function renderModTable(variants) {
+  const tbody = document.querySelector('#mod-table tbody');
+  tbody.innerHTML = variants.map(v => `<tr>
+    <td><strong>${v.gene}</strong></td>
+    <td>${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos.toLocaleString()}</td>
+    <td class="truncate" title="${v.hgvsp}">${v.hgvsp || '-'}</td>
+    <td>${v.consequence}</td>
+    <td>${gtBadge(v.gt)}</td>
+    <td>${fmtScore(v.cadd)}</td>
+    <td>${fmtScore(v.revel)}</td>
+    <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
+    <td>${v.sift || '-'}</td>
+    <td>${v.polyphen || '-'}</td>
+    <td>${fmtAF(v.gnomadg)}</td>
+    <td>${clinsigBadge(v.clinsig)}</td>
+  </tr>`).join('');
+}
+
+function renderSvTable(tableId, variants) {
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  tbody.innerHTML = variants.map(v => `<tr>
+    <td>${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos.toLocaleString()}-${v.end.toLocaleString()}</td>
+    <td><span class="badge ${v.svtype === 'DEL' ? 'high' : v.svtype === 'DUP' ? 'moderate' : 'low'}">${v.svtype}</span></td>
+    <td>${v.svlen.toLocaleString()}</td>
+    <td><strong>${v.gene || '-'}</strong></td>
+    <td>${gtBadge(v.gt)}</td>
+    <td style="font-size:11px;">${v.id}</td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════ KEY FINDINGS ═══════════════════════════
+function renderKeyFindings() {
+  const el = document.getElementById('key-findings');
+  let html = '';
+
+  // ── TRGT pathogenic / intermediate findings go at the TOP ──
+  // Repeat expansions are the single most clinically actionable thing this
+  // dashboard can surface (C9orf72 is the #1 ALS gene). When pathogenic, we
+  // want the user to see it before anything else.
+  const trgtLoci = DATA.trgt_loci || [];
+  const trgtPath = trgtLoci.filter(r => r.status === 'pathogenic');
+  const trgtRisk = trgtLoci.filter(r => r.status === 'intermediate' || r.status === 'risk');
+  if (trgtPath.length > 0) {
+    html += `<div class="clinical-box critical"><h3>⚠ PATHOGENIC Repeat Expansion(s) Detected (${trgtPath.length})</h3>
+      <p style="font-size:13px; margin-bottom:8px;">TRGT genotyped one or more repeat loci above the established pathogenic threshold. These findings, if confirmed, are typically the proximate cause of disease and override all variant-level findings below.</p>
+      <ul style="margin-left:16px;">`;
+    trgtPath.forEach(r => {
+      const chrom = (r.chrom || '').startsWith('chr') ? r.chrom : 'chr' + r.chrom;
+      html += `<li><strong>${r.trid}</strong> at ${chrom}:${r.pos.toLocaleString()} — <strong>${r.max_mc} repeats</strong> (motif ${r.motifs}, GT ${r.gt})`;
+      if (r.status_label) html += ` — ${r.status_label}`;
+      html += `</li>`;
+    });
+    html += `</ul>
+      <p style="font-size:12px; margin-top:8px; color:#7f1d1d;"><strong>Action:</strong> Confirm orthogonally (Southern blot or repeat-primed PCR) before clinical action. See the <a href="#" onclick="showSection('repeats'); return false;" style="color:#7f1d1d; text-decoration:underline;">Repeat Expansions tab</a> for the waterfall plot.</p>
+    </div>`;
+  }
+  if (trgtRisk.length > 0) {
+    html += `<div class="clinical-box"><h3>Intermediate / Risk-Modifier Repeat Expansions (${trgtRisk.length})</h3><ul style="margin-left:16px;">`;
+    trgtRisk.forEach(r => {
+      const chrom = (r.chrom || '').startsWith('chr') ? r.chrom : 'chr' + r.chrom;
+      html += `<li><strong>${r.trid}</strong> at ${chrom}:${r.pos.toLocaleString()} — <strong>${r.max_mc} repeats</strong>`;
+      if (r.status_label) html += ` — ${r.status_label}`;
+      html += `</li>`;
+    });
+    html += `</ul></div>`;
+  }
+
+  const alsDb = DATA.als_db_variants || [];
+  const tier1Hits = alsDb.filter(v => v.tier === 'Tier 1');
+  const tier2Hits = alsDb.filter(v => v.tier === 'Tier 2');
+
+  if (alsDb.length > 0) {
+    html += `<div class="clinical-box critical"><h3>ALS Database Matches Found (${alsDb.length})</h3><ul style="margin-left:16px;">`;
+    alsDb.forEach(v => {
+      html += `<li><strong>${v.gene}</strong> ${v.hgvsp || v.hgvsc || `${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos}`} — ${v.consequence} (${v.impact})`;
+      if (v.als_db_sig) html += ` — ALS DB: ${v.als_db_sig}`;
+      if (v.clinsig && v.clinsig !== '-') html += ` — ClinVar: ${v.clinsig}`;
+      html += `</li>`;
+    });
+    html += `</ul></div>`;
+  } else {
+    html += `<div class="clinical-box info"><h3>No ALS Database Matches</h3><p>No variants matched the curated ALS mutation database. This does not rule out ALS-related genetic causes.</p></div>`;
+  }
+
+  // Protein-change matches
+  const proteinMatches = DATA.protein_match_variants || [];
+  if (proteinMatches.length > 0) {
+    html += `<div class="clinical-box critical"><h3>Protein-Change Matches Found (${proteinMatches.length})</h3>
+      <p style="font-size:13px; margin-bottom:8px;">These patient variants produce the same amino acid change as a known ALS mutation, even though they may sit at different DNA positions. Position-based matching tools would miss these.</p><ul style="margin-left:16px;">`;
+    proteinMatches.forEach(v => {
+      html += `<li><strong>${v.gene}</strong> ${v.hgvsp || v.hgvsc || `${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos}`} — ${v.consequence} (${v.impact})`;
+      if (v.gnomadg !== null && v.gnomadg !== undefined) html += ` — gnomAD: ${fmtAF(v.gnomadg)}`;
+      html += `</li>`;
+    });
+    html += `</ul></div>`;
+  }
+
+  // ClinVar highlights in ALS genes
+  const clinvarAls = (DATA.clinvar_variants || []).filter(v =>
+    ['SOD1','C9orf72','FUS','TARDBP','TBK1','OPTN','VCP','UBQLN2','ANG','SETX','NEK1','KIF5A','ALS2'].includes(v.gene)
+  );
+  if (clinvarAls.length > 0) {
+    html += `<div class="clinical-box"><h3>ClinVar Pathogenic in Tier 1 ALS Genes (${clinvarAls.length})</h3><ul style="margin-left:16px;">`;
+    clinvarAls.forEach(v => {
+      html += `<li><strong>${v.gene}</strong> ${v.hgvsp || ''} — ${v.clndn || v.consequence}</li>`;
+    });
+    html += `</ul></div>`;
+  }
+
+  // The C9orf72 reminder changes depending on whether TRGT ran. When TRGT
+  // data is present, the dashboard CAN see C9orf72; we point the user to it.
+  // When TRGT didn't run, the standard "needs RP-PCR" caveat applies.
+  const trgtRan = (DATA.trgt_loci || []).length > 0;
+  const c9Locus = (DATA.trgt_loci || []).find(r => /C9(orf|ORF)?72/i.test(r.trid));
+  let c9Line;
+  if (trgtRan && c9Locus) {
+    c9Line = `The <strong>C9orf72 hexanucleotide repeat expansion</strong> (most common genetic cause of ALS) was genotyped by TRGT — see the <a href="#" onclick="showSection('repeats'); return false;" style="color:#1e40af; text-decoration:underline;">Repeat Expansions tab</a>. Patient genotype: <strong>${c9Locus.max_mc} repeats</strong> (${c9Locus.status}). All pathogenic findings require orthogonal confirmation.`;
+  } else if (trgtRan) {
+    c9Line = `TRGT was run but did not include C9orf72 in the catalog. The C9orf72 hexanucleotide repeat expansion (most common genetic cause of ALS) must be assessed by Southern blot or repeat-primed PCR.`;
+  } else {
+    c9Line = `The <strong>C9orf72 hexanucleotide repeat expansion</strong> (most common genetic cause of ALS, ~40% of familial cases) requires separate repeat-primed PCR or Southern blot and may not appear in standard WGS variant calling.`;
+  }
+  html += `<div class="clinical-box info"><h3>Important Reminders</h3>
+    <ul style="margin-left:16px;">
+      <li>${c9Line}</li>
+      <li>Variants of uncertain significance (VUS) should not be used for clinical decision-making without further evidence.</li>
+      <li>This analysis covers coding and near-coding variants; deep intronic or regulatory variants may be missed.</li>
+    </ul></div>`;
+
+  el.innerHTML = html;
+}
+
+// ═══════════════════════════ SUMMARY ALS TABLE ═══════════════════════════
+function renderSummaryAlsTable() {
+  const el = document.getElementById('summary-als-table');
+  const variants = DATA.als_db_variants || [];
+  if (variants.length === 0) {
+    el.innerHTML = '<p style="color:#718096; font-size:13px;">No ALS database matches found.</p>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Gene</th><th>Tier</th><th>Variant</th><th>Consequence</th><th>Impact</th><th>Zygosity</th><th>ClinVar</th><th>ALS DB</th><th>SpliceAI</th><th>gnomAD</th></tr></thead><tbody>';
+  variants.forEach(v => {
+    html += `<tr>
+      <td><strong>${v.gene}</strong></td>
+      <td>${tierBadge(v.tier)}</td>
+      <td>${v.hgvsp || v.hgvsc || `${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos}`}</td>
+      <td>${v.consequence}</td>
+      <td>${impactBadge(v.impact)}</td>
+      <td>${gtBadge(v.gt)}</td>
+      <td>${clinsigBadge(v.clinsig)}</td>
+      <td>${v.als_db_sig || '-'}</td>
+      <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
+      <td>${fmtAF(v.gnomadg)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ═══════════════════════════ FILTERING / SORTING ═══════════════════════════
+//
+// Unified filtering pipeline. Each table has independent filter state:
+//   { search:    global substring across all cells (from the filter-bar input)
+//     columns:   per-column substring filters (from the column-filter row)
+//     hideRef:   when true, hide rows whose genotype cell is 0/0, ./., or '-'
+//   }
+// All filters AND together. Re-running applyFilters(tableId) re-evaluates
+// every row against the current state.
+
+// Genotype column index per table — used by the "Hide 0/0 and ./." checkbox.
+const GT_COL = {
+  'als-db-table':       6,
+  'protein-table':      6,
+  'als-genes-table':    6,
+  'all-filtered-table': 6,
+  'clinvar-table':      5,
+  'high-table':         4,
+  'mod-table':          4,
+  'sv-table':           4,
+  'sv-known-table':     4,
+};
+
+const TABLE_FILTERS = {};
+function getFilterState(tableId) {
+  if (!TABLE_FILTERS[tableId]) {
+    TABLE_FILTERS[tableId] = { search: '', columns: {}, hideRef: false };
+  }
+  return TABLE_FILTERS[tableId];
+}
+
+function applyFilters(tableId) {
+  const state = getFilterState(tableId);
+  const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+  const gtCol = GT_COL[tableId];
+  rows.forEach(row => {
+    let show = true;
+
+    // Global search — substring match across the row's full text.
+    if (state.search && !row.textContent.toLowerCase().includes(state.search)) {
+      show = false;
+    }
+
+    // Per-column substring filters.
+    if (show) {
+      for (const [colIdx, val] of Object.entries(state.columns)) {
+        if (!val) continue;
+        const cell = row.cells[parseInt(colIdx)];
+        if (!cell || !cell.textContent.toLowerCase().includes(val.toLowerCase())) {
+          show = false;
+          break;
+        }
+      }
+    }
+
+    // Hide non-variant calls (homozygous reference and missing genotypes).
+    // After gtBadge() runs, variant calls render as the literal text "HET" or
+    // "HOM"; everything else (0/0, ./., empty, '-') falls through unchanged.
+    if (show && state.hideRef && gtCol !== undefined) {
+      const gtCell = row.cells[gtCol];
+      const gtText = gtCell ? gtCell.textContent.trim() : '';
+      if (gtText !== 'HET' && gtText !== 'HOM') show = false;
+    }
+
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+// Public API — kept name-compatible with the old single-purpose filter funcs
+// so existing oninput/onchange handlers keep working.
+function filterTable(tableId, query) {
+  getFilterState(tableId).search = (query || '').toLowerCase();
+  applyFilters(tableId);
+}
+function filterTableByCol(tableId, colIdx, val) {
+  getFilterState(tableId).columns[colIdx] = val || '';
+  applyFilters(tableId);
+}
+function filterTableByImpact(tableId, impact) {
+  // Impact column index varies per table; locate it from the header text.
+  const headers = document.querySelectorAll(`#${tableId} thead tr:first-child th`);
+  let idx = -1;
+  headers.forEach((th, i) => { if (th.textContent.trim().startsWith('Impact')) idx = i; });
+  if (idx >= 0) filterTableByCol(tableId, idx, impact);
+}
+function toggleHideRef(tableId, on) {
+  getFilterState(tableId).hideRef = !!on;
+  applyFilters(tableId);
+}
+
+// Inject a row of per-column substring filters under each table header.
+// Called once per table from the init handler. Skips columns that already
+// have a filter (e.g. the high-table's Consequence dropdown remains the
+// primary control for column 3 — column-filter input would be redundant
+// alongside it but is still useful as a free-text override).
+function addColumnFilterRow(tableId) {
+  const thead = document.querySelector(`#${tableId} thead`);
+  if (!thead || thead.querySelector('.col-filter-row')) return;
+  const headerCells = thead.querySelectorAll('tr:first-child th');
+  if (!headerCells.length) return;
+  const filterRow = document.createElement('tr');
+  filterRow.className = 'col-filter-row';
+  headerCells.forEach((th, i) => {
+    const cell = document.createElement('th');
+    const placeholder = th.textContent.trim().replace(/[↕↑↓]/g, '').trim().toLowerCase() || 'filter';
+    cell.innerHTML = `<input type="text" placeholder="${placeholder}" oninput="filterTableByCol('${tableId}', ${i}, this.value)">`;
+    filterRow.appendChild(cell);
+  });
+  thead.appendChild(filterRow);
+}
+
+let sortState = {};
+function sortTable(tableId, colIdx) {
+  const key = `${tableId}-${colIdx}`;
+  sortState[key] = !(sortState[key] || false);
+  const asc = sortState[key];
+  const tbody = document.querySelector(`#${tableId} tbody`);
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.sort((a, b) => {
+    let aVal = a.cells[colIdx]?.textContent.trim() || '';
+    let bVal = b.cells[colIdx]?.textContent.trim() || '';
+    const aNum = parseFloat(aVal.replace(/,/g, ''));
+    const bNum = parseFloat(bVal.replace(/,/g, ''));
+    if (!isNaN(aNum) && !isNaN(bNum)) return asc ? aNum - bNum : bNum - aNum;
+    return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
+// ═══════════════════════════ CHARTS ═══════════════════════════
+function renderCharts() {
+  // Consequence distribution (high impact)
+  const hiVariants = DATA.high_impact_variants || [];
+  const csqCounts = {};
+  hiVariants.forEach(v => { csqCounts[v.consequence] = (csqCounts[v.consequence] || 0) + 1; });
+  const csqLabels = Object.keys(csqCounts).sort((a,b) => csqCounts[b] - csqCounts[a]);
+  new Chart(document.getElementById('chart-consequences'), {
+    type: 'bar',
+    data: {
+      labels: csqLabels,
+      datasets: [{ data: csqLabels.map(l => csqCounts[l]), backgroundColor: '#e94560', borderRadius: 4 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { maxRotation: 45 } } } }
+  });
+
+  // Gene distribution
+  // Use all_filtered_variants for charts since it's the complete union of all filters
+  const allVariants = DATA.all_filtered_variants || [...(DATA.als_db_variants||[]), ...(DATA.protein_match_variants||[]), ...(DATA.clinvar_variants||[]), ...hiVariants, ...(DATA.moderate_variants||[])];
+  const geneCounts = {};
+  allVariants.forEach(v => { if (v.gene) geneCounts[v.gene] = (geneCounts[v.gene] || 0) + 1; });
+  const geneLabels = Object.keys(geneCounts).sort((a,b) => geneCounts[b] - geneCounts[a]).slice(0, 20);
+  const geneColors = geneLabels.map(g => ['SOD1','C9orf72','FUS','TARDBP','TBK1','OPTN','VCP','UBQLN2','ANG','SETX','NEK1','KIF5A','ALS2'].includes(g) ? '#e94560' : '#3b82f6');
+  new Chart(document.getElementById('chart-genes'), {
+    type: 'bar',
+    data: {
+      labels: geneLabels,
+      datasets: [{ data: geneLabels.map(l => geneCounts[l]), backgroundColor: geneColors, borderRadius: 4 }]
+    },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+  });
+
+  // CADD distribution
+  const caddVals = hiVariants.map(v => v.cadd).filter(v => v !== null);
+  const caddBins = [0,5,10,15,20,25,30,35,40,50];
+  const caddHist = new Array(caddBins.length - 1).fill(0);
+  caddVals.forEach(v => { for (let i = 0; i < caddBins.length - 1; i++) { if (v >= caddBins[i] && v < caddBins[i+1]) { caddHist[i]++; break; } } });
+  new Chart(document.getElementById('chart-cadd'), {
+    type: 'bar',
+    data: {
+      labels: caddBins.slice(0,-1).map((b,i) => `${b}-${caddBins[i+1]}`),
+      datasets: [{ data: caddHist, backgroundColor: caddBins.slice(0,-1).map(b => b >= 20 ? '#e94560' : '#94a3b8'), borderRadius: 4 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'CADD Phred Score' } }, y: { title: { display: true, text: 'Count' } } } }
+  });
+
+  // Impact distribution
+  const impactCounts = { HIGH: 0, MODERATE: 0, LOW: 0, MODIFIER: 0 };
+  allVariants.forEach(v => { if (v.impact in impactCounts) impactCounts[v.impact]++; });
+  new Chart(document.getElementById('chart-impact'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(impactCounts),
+      datasets: [{ data: Object.values(impactCounts), backgroundColor: ['#e94560','#f59e0b','#10b981','#94a3b8'] }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'right' } } }
+  });
+
+  // SpliceAI Δ-max distribution — bins 0.0-1.0 in 0.1 increments. Variants
+  // without SpliceAI scores (non-missense, intergenic, no source available)
+  // are excluded so the histogram reflects only variants we could score.
+  // Color scheme matches the table: amber at ≥0.5, red at ≥0.8.
+  const spliceaiVals = allVariants.map(v => v.spliceai).filter(v => v !== null && v !== undefined);
+  const saiBins = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.01];
+  const saiHist = new Array(saiBins.length - 1).fill(0);
+  spliceaiVals.forEach(v => {
+    for (let i = 0; i < saiBins.length - 1; i++) {
+      if (v >= saiBins[i] && v < saiBins[i+1]) { saiHist[i]++; break; }
+    }
+  });
+  const saiColors = saiBins.slice(0,-1).map(b => b >= 0.8 ? '#dc2626' : b >= 0.5 ? '#d97706' : '#94a3b8');
+  new Chart(document.getElementById('chart-spliceai'), {
+    type: 'bar',
+    data: {
+      labels: saiBins.slice(0,-1).map((b,i) => `${b.toFixed(1)}-${saiBins[i+1].toFixed(1)}`),
+      datasets: [{ data: saiHist, backgroundColor: saiColors, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { afterLabel: () => 'Δ ≥ 0.5: high precision · Δ ≥ 0.8: very high' } }
+      },
+      scales: {
+        x: { title: { display: true, text: 'SpliceAI Δ-max (max of DS_AG/AL/DG/DL)' } },
+        y: { title: { display: true, text: 'Variant count' } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════ TRGT REPEAT EXPANSIONS ═══════════════════════════
+//
+// Renders the inline list of TRGT loci on the Repeat Expansions tab. Sorted
+// by severity by default — pathogenic first, then intermediate/risk, then
+// normal, then unknown. Click a card to expand and fetch the waterfall SVG
+// (lazy — we don't try to load 70+ SVGs eagerly).
+
+const TRGT_STATUS_ORDER = { pathogenic: 0, intermediate: 1, risk: 1, unknown: 2, normal: 3 };
+
+function fmtRepeatList(arr) {
+  // Render a TRGT list field like [18, 1200] as "18, 1200"; "-" for empty.
+  if (!arr || arr.length === 0) return '-';
+  return arr.map(v => (v === null || v === undefined) ? '.' : v).join(', ');
+}
+
+function trgtStatusBadge(s) {
+  const labels = {
+    pathogenic: 'Pathogenic', intermediate: 'Intermediate',
+    risk: 'Risk modifier', normal: 'Normal', unknown: 'No threshold'
+  };
+  return `<span class="badge status-${s}">${labels[s] || s}</span>`;
+}
+
+function renderRepeatList() {
+  const list = document.getElementById('trgt-list');
+  const empty = document.getElementById('trgt-empty');
+  const all = DATA.trgt_loci || [];
+  if (all.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const q = (document.getElementById('trgt-search').value || '').toLowerCase();
+  const statusFilter = document.getElementById('trgt-filter-status').value;
+  const sortKey = document.getElementById('trgt-sort').value;
+
+  let rows = all.filter(r => {
+    if (statusFilter === 'flagged' && !(r.status === 'pathogenic' || r.status === 'intermediate' || r.status === 'risk')) return false;
+    if (statusFilter && statusFilter !== 'flagged' && r.status !== statusFilter) return false;
+    if (q) {
+      const hay = `${r.trid} ${r.motifs} ${r.status} ${r.status_label} ${r.chrom}:${r.pos}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    if (sortKey === 'trid') return a.trid.localeCompare(b.trid);
+    if (sortKey === 'max_mc') return (b.max_mc || 0) - (a.max_mc || 0);
+    if (sortKey === 'chrom_pos') {
+      const c = (a.chrom || '').localeCompare(b.chrom || '');
+      return c !== 0 ? c : (a.pos - b.pos);
+    }
+    // default: status severity
+    const sa = TRGT_STATUS_ORDER[a.status] ?? 4;
+    const sb = TRGT_STATUS_ORDER[b.status] ?? 4;
+    if (sa !== sb) return sa - sb;
+    return (b.max_mc || 0) - (a.max_mc || 0);
+  });
+
+  list.innerHTML = rows.map((r, i) => {
+    const chrom = (r.chrom || '').startsWith('chr') ? r.chrom : 'chr' + (r.chrom || '');
+    const al = fmtRepeatList(r.al);
+    const mc = fmtRepeatList(r.mc);
+    const sd = fmtRepeatList(r.sd);
+    const ap = (r.ap && r.ap.length)
+      ? r.ap.map(v => v === null || v === undefined ? '.' : Number(v).toFixed(2)).join(', ')
+      : '-';
+    const am = (r.am && r.am.length)
+      ? r.am.map(v => v === null || v === undefined ? '.' : Number(v).toFixed(2)).join(', ')
+      : '';
+    const motifs = r.motifs || '-';
+    // SVG path convention is `${plot_prefix}${sample}.${trid}.waterfall.svg`
+    const svgUrl = DATA.trgt_plot_prefix
+      ? `${DATA.trgt_plot_prefix}${DATA.sample}.${r.trid}.waterfall.svg`
+      : '';
+    const labelLine = r.status_label
+      ? `<div class="metric" style="margin-top:4px; color:#525252;">${r.status_label}</div>`
+      : '';
+    return `<div class="repeat-card status-${r.status}" id="trgt-card-${i}">
+      <div class="head" onclick="toggleRepeatCard(${i}, '${svgUrl}')">
+        <div class="trid">${r.trid}</div>
+        ${trgtStatusBadge(r.status)}
+        <div class="metric"><strong>${chrom}:${r.pos.toLocaleString()}</strong></div>
+        <div class="metric">motif <strong>${motifs}</strong></div>
+        <div class="metric">GT <strong>${r.gt || '-'}</strong></div>
+        <div class="metric">repeats <strong>${mc}</strong></div>
+        <div class="metric">depth <strong>${sd}</strong></div>
+        <div class="toggle">${svgUrl ? 'waterfall plot' : 'details'}</div>
+      </div>
+      ${labelLine}
+      <div class="body" data-loaded="0" data-svg-url="${svgUrl}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; font-size:13px; margin-bottom:12px;">
+          <div><strong>Allele lengths (bp):</strong> ${al}</div>
+          <div><strong>Motif counts:</strong> ${mc}</div>
+          <div><strong>Supporting reads:</strong> ${sd}</div>
+          <div><strong>Allele purity:</strong> ${ap}</div>
+          ${am ? `<div><strong>CpG methylation:</strong> ${am}</div>` : ''}
+          <div><strong>Confidence interval:</strong> ${r.allr || '-'}</div>
+        </div>
+        <div class="trgt-svg-host"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRepeatCard(i, svgUrl) {
+  const card = document.getElementById('trgt-card-' + i);
+  card.classList.toggle('expanded');
+  if (!card.classList.contains('expanded')) return;
+
+  const body = card.querySelector('.body');
+  if (body.getAttribute('data-loaded') !== '0') return;
+  const host = body.querySelector('.trgt-svg-host');
+
+  if (!svgUrl) {
+    host.innerHTML = '<p style="color:#718096; font-size:12px;">No waterfall plot available for this locus.</p>';
+    body.setAttribute('data-loaded', '1');
+    return;
+  }
+
+  // Lazy-fetch the SVG. Using img would also work; we inline so it's
+  // searchable + scalable + we can show fetch errors in-place.
+  host.innerHTML = '<p style="color:#718096; font-size:12px;">Loading waterfall plot…</p>';
+  fetch(svgUrl)
+    .then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    })
+    .then(svg => {
+      host.innerHTML = svg;
+      body.setAttribute('data-loaded', '1');
+    })
+    .catch(err => {
+      host.innerHTML = `<p style="color:#a16207; font-size:12px;">Could not load <code>${svgUrl}</code>: ${err.message}. Run <code>./serve_dashboard.sh</code> if you opened this via file://, or re-run the generator with <code>--trgt-plots-dir=&lt;path&gt;</code>.</p>`;
+      body.setAttribute('data-loaded', '1');
+    });
+}
+
+// ═══════════════════════════ ALL VARIANTS — DUCKDB-WASM ═══════════════════════════
+//
+// This block backs the "All Variants" tab. It lazy-loads DuckDB-WASM the first
+// time the user clicks the tab (cold start ~1-2s on a warm CDN), opens the
+// Parquet sidecar via HTTP range requests, and runs a fresh SQL query whenever
+// any filter input changes. Pagination is handled with LIMIT/OFFSET against
+// the same query, so the user can scan all 4-5M rows without ever loading them.
+
+const AV_STATE = {
+  initialized: false,
+  loading: false,
+  db: null,
+  conn: null,
+  total: 0,
+  page: 0,
+  pageSize: 50,
+  // chrom,pos is the natural genomic order. Sorting by pos alone forces
+  // DuckDB to scan the whole parquet (pos values overlap across chromosomes,
+  // so it can't prune row groups). chrom,pos can be served from just the
+  // first row group in the parquet, which is what we want as the default.
+  sortCol: 'chrom,pos',
+  sortAsc: true,
+  lastQueryToken: 0,       // guards against stale async results
+  searchDebounce: null,
+};
+
+// Surface a status message in the All-Variants pane (info / error).
+function avStatus(title, body, kind) {
+  const box = document.getElementById('av-status');
+  const t = document.getElementById('av-status-title');
+  const b = document.getElementById('av-status-body');
+  box.className = 'clinical-box ' + (kind === 'error' ? 'critical' : kind === 'warn' ? '' : 'info');
+  t.textContent = title || '';
+  b.innerHTML = body || '';
+  box.style.display = title ? '' : 'none';
+}
+
+function avShowControls(show) {
+  document.getElementById('av-controls').style.display = show ? '' : 'none';
+}
+
+// Init DuckDB-WASM once, on first activation of the tab.
+// Shared DuckDB-WASM bootstrap. Lazy-initialized on first request; further
+// calls await the same promise. Both All-Variants and All-SVs tabs use this
+// to share a single conn (a second tab opening is essentially free).
+const DUCKDB_STATE = { initPromise: null, db: null, conn: null };
+async function duckdbBootstrap() {
+  if (DUCKDB_STATE.initPromise) return DUCKDB_STATE.initPromise;
+  DUCKDB_STATE.initPromise = (async () => {
+    // Dynamic import from JSDelivr — ESM bundle of DuckDB-WASM. This pins to
+    // the version that was current when this dashboard was generated; bumping
+    // it later is safe so long as the parquet schemas stay stable.
+    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm');
+    const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+    const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+    const worker_url = URL.createObjectURL(
+      new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+    );
+    const worker = new Worker(worker_url);
+    const logger = new duckdb.ConsoleLogger();
+    const db = new duckdb.AsyncDuckDB(logger, worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(worker_url);
+    const conn = await db.connect();
+    DUCKDB_STATE.db = db;
+    DUCKDB_STATE.conn = conn;
+    return { db, conn };
+  })();
+  return DUCKDB_STATE.initPromise;
+}
+
+// Shared error-presentation helper. Translates the typical failure modes
+// (file:// protocol, missing parquet, network error) into user-facing hints.
+function duckdbErrorHint(parquetUrl) {
+  const isFileProto = window.location.protocol === 'file:';
+  return isFileProto
+    ? `<p style="margin-top:8px;"><strong>Tip:</strong> this dashboard is open via <code>file://</code>, but DuckDB needs HTTP to range-fetch the Parquet. Run <code>./serve_dashboard.sh</code> (or <code>python3 -m http.server</code> in this folder) and open the dashboard via <code>http://localhost:&lt;port&gt;/</code> instead.</p>`
+    : `<p style="margin-top:8px;">Check that <code>${parquetUrl}</code> is in the same directory as this HTML and readable by the server.</p>`;
+}
+
+async function avInit() {
+  if (AV_STATE.initialized || AV_STATE.loading) return;
+
+  // Empty state: no Parquet sidecar was generated (pyarrow missing, full VCF
+  // not found, or --skip-parquet was passed). Tell the user how to enable it
+  // and don't try to load anything.
+  if (!DATA.parquet_path) {
+    avStatus('Full-genome view not available',
+      'The Parquet sidecar with all annotated variants was not generated when this dashboard was built. ' +
+      'To enable this tab, re-run the dashboard generator with <code>--full-vcf=&lt;path/to/annotated.vcf.gz&gt;</code> ' +
+      'and ensure <code>pyarrow</code> is installed (<code>pip install pyarrow</code>). The other tabs ' +
+      '(filtered subsets) work normally without it.', 'warn');
+    return;
+  }
+
+  AV_STATE.loading = true;
+  avStatus('Loading the data layer…',
+    'Pulling DuckDB-WASM (a SQL engine that runs in the browser) and opening ' +
+    '<code>' + DATA.parquet_path + '</code>. First load can take 1–2 seconds.', 'info');
+
+  try {
+    const { conn } = await duckdbBootstrap();
+
+    // Register the parquet as a view. DuckDB's read_parquet supports HTTP
+    // range scans, so this is cheap — we don't actually pull data yet.
+    //
+    // IMPORTANT: DuckDB-WASM treats a bare filename like "als_variants.parquet"
+    // as a pattern in its virtual filesystem, NOT a URL — so it never makes an
+    // HTTP request and fails with "No files found that match the pattern".
+    // We resolve the relative path against the current page URL to get an
+    // absolute http:// URL, which DuckDB recognizes as a remote resource and
+    // fetches via the httpfs extension.
+    const parquetUrl = new URL(DATA.parquet_path, window.location.href).href;
+    await conn.query(
+      `CREATE OR REPLACE VIEW variants AS
+         SELECT * FROM read_parquet('${parquetUrl.replace(/'/g, "''")}')`
+    );
+    const totalRes = await conn.query("SELECT COUNT(*) AS n FROM variants");
+    AV_STATE.total = Number(totalRes.toArray()[0].n);
+    document.getElementById('av-total').textContent = AV_STATE.total.toLocaleString();
+
+    // Fill the genotype breakdown in the explanation note from whatever Parquet
+    // is loaded (sample-agnostic). Grouped by genotype rather than by FILTER,
+    // since FILTER labels like RefCall/NoCall are caller-specific.
+    try {
+      const bd = (await conn.query(
+        `SELECT
+           SUM(CASE WHEN gt IN ('0/0','0|0') THEN 1 ELSE 0 END) AS ref,
+           SUM(CASE WHEN gt IN ('./.','.|.','.','') THEN 1 ELSE 0 END) AS nocall
+         FROM variants`)).toArray()[0];
+      const ref = Number(bd.ref), nocall = Number(bd.nocall);
+      const variant = Math.max(0, AV_STATE.total - ref - nocall);
+      const pct = n => AV_STATE.total ? Math.round(100 * n / AV_STATE.total) : 0;
+      const el = document.getElementById('av-gt-breakdown');
+      if (el) el.innerHTML =
+        ` In this dataset that is <strong>${variant.toLocaleString()}</strong> rows with an alternate allele, ` +
+        `<strong>${ref.toLocaleString()}</strong> reference (<code>0/0</code>, ${pct(ref)}%) and ` +
+        `<strong>${nocall.toLocaleString()}</strong> no-call (<code>./.</code>, ${pct(nocall)}%).`;
+    } catch (e) { /* breakdown is best-effort — ignore if columns differ */ }
+
+    AV_STATE.conn = conn;
+    AV_STATE.initialized = true;
+    AV_STATE.loading = false;
+    avStatus('', '', '');
+    avShowControls(true);
+    avWireFilters();
+    avRunQuery();
+  } catch (err) {
+    AV_STATE.loading = false;
+    avStatus('Could not load the variant Parquet',
+      `<pre style="font-size:12px; white-space:pre-wrap; background:#fef2f2; padding:8px; border-radius:4px;">${(err && err.message) ? err.message : err}</pre>` + duckdbErrorHint(DATA.parquet_path),
+      'error');
+  }
+}
+
+// SQL identifier safe-escape (just doubles up single quotes — values only).
+function avSql(s) { return String(s).replace(/'/g, "''"); }
+
+// Build the WHERE clause from the current filter inputs. Returns an array of
+// predicates that get AND-ed together.
+function avBuildWhere() {
+  const preds = [];
+
+  const search = (document.getElementById('av-search').value || '').trim();
+  if (search) {
+    // Cross-column substring match. concat_ws handles NULLs cleanly.
+    const s = avSql(search.toLowerCase());
+    preds.push(`lower(concat_ws('|', gene, hgvsp, hgvsc, consequence, clinsig, clndn, existing, chrom || ':' || pos)) LIKE '%${s}%'`);
+  }
+  const gene = (document.getElementById('av-f-gene').value || '').trim();
+  if (gene) preds.push(`upper(gene) = upper('${avSql(gene)}')`);
+
+  const chrom = (document.getElementById('av-f-chrom').value || '').trim();
+  if (chrom) {
+    // Accept "21" or "chr21" — normalize.
+    const c = avSql(chrom.startsWith('chr') ? chrom : 'chr' + chrom);
+    preds.push(`(chrom = '${c}' OR chrom = '${avSql(chrom)}')`);
+  }
+  const posMin = parseInt(document.getElementById('av-f-pos-min').value, 10);
+  if (Number.isFinite(posMin)) preds.push(`pos >= ${posMin}`);
+  const posMax = parseInt(document.getElementById('av-f-pos-max').value, 10);
+  if (Number.isFinite(posMax)) preds.push(`pos <= ${posMax}`);
+
+  const impact = document.getElementById('av-f-impact').value;
+  if (impact) preds.push(`impact = '${avSql(impact)}'`);
+
+  const csq = (document.getElementById('av-f-csq').value || '').trim();
+  if (csq) preds.push(`lower(consequence) LIKE '%${avSql(csq.toLowerCase())}%'`);
+
+
+  const afMax = parseFloat(document.getElementById('av-f-af-max').value);
+  if (Number.isFinite(afMax)) {
+    // Treat NULL gnomAD as "novel" — keep when filtering for rare.
+    preds.push(`(gnomadg IS NULL OR gnomadg <= ${afMax})`);
+  }
+  const caddMin = parseFloat(document.getElementById('av-f-cadd-min').value);
+  if (Number.isFinite(caddMin)) preds.push(`cadd >= ${caddMin}`);
+  const revelMin = parseFloat(document.getElementById('av-f-revel-min').value);
+  if (Number.isFinite(revelMin)) preds.push(`revel >= ${revelMin}`);
+  const saiMin = parseFloat(document.getElementById('av-f-sai-min').value);
+  if (Number.isFinite(saiMin)) preds.push(`spliceai >= ${saiMin}`);
+
+  const gt = document.getElementById('av-f-gt').value;
+  if (gt === 'HET') preds.push(`gt IN ('0/1','0|1','1|0')`);
+  else if (gt === 'HOM') preds.push(`gt IN ('1/1','1|1')`);
+  else if (gt === 'NONREF') preds.push(`gt NOT IN ('0/0','./.','0|0','.|.','.','')`);
+
+  const clin = (document.getElementById('av-f-clin').value || '').trim();
+  if (clin) preds.push(`lower(clinsig) LIKE '%${avSql(clin.toLowerCase())}%'`);
+
+  // Hide homozygous-reference (0/0) and no-call (./.) records. These are
+  // DeepVariant RefCall / NoCall rows — sites the caller evaluated but did not
+  // call as a variant in this sample — so they carry no alt allele here.
+  if (document.getElementById('av-f-hide-ref').checked) {
+    preds.push(`gt NOT IN ('0/0','./.','0|0','.|.','.','')`);
+  }
+
+  return preds;
+}
+
+async function avRunQuery() {
+  if (!AV_STATE.initialized) return;
+  const token = ++AV_STATE.lastQueryToken;
+
+  const preds = avBuildWhere();
+  const where = preds.length ? 'WHERE ' + preds.join(' AND ') : '';
+
+  // chrom,pos is a compound sort that produces natural chromosomal order
+  // for that one combined header.
+  let orderCols;
+  if (AV_STATE.sortCol === 'chrom,pos') {
+    orderCols = `chrom ${AV_STATE.sortAsc ? 'ASC' : 'DESC'}, pos ${AV_STATE.sortAsc ? 'ASC' : 'DESC'}`;
+  } else {
+    orderCols = `${AV_STATE.sortCol} ${AV_STATE.sortAsc ? 'ASC' : 'DESC'} NULLS LAST, chrom ASC, pos ASC`;
+  }
+
+  const pageSize = AV_STATE.pageSize;
+  const offset = AV_STATE.page * pageSize;
+
+  // Show an immediate loading state so the user knows the query is in flight.
+  // Queries against an 8M-variant parquet can take 5-30 seconds depending on
+  // the filter; without this, the table just looks empty and the user thinks
+  // the page is broken.
+  document.getElementById('av-result-summary').textContent = 'Querying…';
+  document.querySelector('#av-table tbody').innerHTML =
+    `<tr><td colspan="14" style="text-align:center; padding:24px; color:#718096;">Loading variants…</td></tr>`;
+
+  // Two queries: a COUNT(*) for the result summary, and a windowed SELECT for
+  // the visible page. DuckDB plans both against the same row-group set so the
+  // count is fast (no full scan when the filter is selective).
+  try {
+    const countPromise = AV_STATE.conn.query(
+      `SELECT COUNT(*) AS n FROM variants ${where}`);
+    const rowsPromise = AV_STATE.conn.query(
+      `SELECT * FROM variants ${where} ORDER BY ${orderCols} LIMIT ${pageSize} OFFSET ${offset}`);
+    const [countRes, rowsRes] = await Promise.all([countPromise, rowsPromise]);
+
+    if (token !== AV_STATE.lastQueryToken) return; // a newer query superseded us
+
+    const matched = Number(countRes.toArray()[0].n);
+    const rows = rowsRes.toArray().map(r => r.toJSON ? r.toJSON() : r);
+    avRenderRows(rows);
+    avUpdateSummary(matched);
+  } catch (err) {
+    avStatus('Query failed', `<pre style="font-size:12px; white-space:pre-wrap;">${(err && err.message) ? err.message : err}</pre>`, 'error');
+    document.querySelector('#av-table tbody').innerHTML = '';
+    document.getElementById('av-result-summary').textContent = 'Query failed — see error above.';
+  }
+}
+
+function avUpdateSummary(matched) {
+  const start = matched === 0 ? 0 : AV_STATE.page * AV_STATE.pageSize + 1;
+  const end = Math.min(matched, (AV_STATE.page + 1) * AV_STATE.pageSize);
+  const pages = Math.max(1, Math.ceil(matched / AV_STATE.pageSize));
+  document.getElementById('av-result-summary').textContent =
+    `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${matched.toLocaleString()} matching variants (of ${AV_STATE.total.toLocaleString()} total)`;
+  document.getElementById('av-page-info').textContent =
+    `page ${AV_STATE.page + 1} / ${pages.toLocaleString()}`;
+  document.getElementById('av-prev').disabled = AV_STATE.page === 0;
+  document.getElementById('av-next').disabled = AV_STATE.page >= pages - 1;
+}
+
+function avRenderRows(rows) {
+  const tbody = document.querySelector('#av-table tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:24px; color:#718096;">No matching variants.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(v => {
+    // Coerce arrow types (BigInts for ints, etc.) into plain JS.
+    const pos = typeof v.pos === 'bigint' ? Number(v.pos) : v.pos;
+    const cadd = (v.cadd === null || v.cadd === undefined) ? null : Number(v.cadd);
+    const revel = (v.revel === null || v.revel === undefined) ? null : Number(v.revel);
+    const sai = (v.spliceai === null || v.spliceai === undefined) ? null : Number(v.spliceai);
+    const af = (v.gnomadg === null || v.gnomadg === undefined) ? null : Number(v.gnomadg);
+    return `<tr>
+      <td><strong>${v.gene || '-'}</strong></td>
+      <td>${(v.chrom || '').startsWith('chr') ? v.chrom : 'chr' + (v.chrom || '')}:${pos ? pos.toLocaleString() : '-'}</td>
+      <td class="truncate" title="${(v.hgvsp || '').replace(/"/g, '&quot;')}">${v.hgvsp || '-'}</td>
+      <td>${v.consequence || '-'}</td>
+      <td>${impactBadge(v.impact || '')}</td>
+      <td>${gtBadge(v.gt || '')}</td>
+      <td>${fmtScore(cadd)}</td>
+      <td>${fmtScore(revel)}</td>
+      <td>${fmtSpliceAI(sai, v.spliceai_source || '')}</td>
+      <td>${v.sift || '-'}</td>
+      <td>${v.polyphen || '-'}</td>
+      <td>${fmtAF(af)}</td>
+      <td>${clinsigBadge(v.clinsig || '')}</td>
+      <td class="truncate" title="${(v.existing || '').replace(/"/g, '&quot;')}">${v.existing || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function avSort(col) {
+  if (AV_STATE.sortCol === col) AV_STATE.sortAsc = !AV_STATE.sortAsc;
+  else { AV_STATE.sortCol = col; AV_STATE.sortAsc = true; }
+  AV_STATE.page = 0;
+  avRunQuery();
+}
+
+function avPage(delta) {
+  AV_STATE.page = Math.max(0, AV_STATE.page + delta);
+  avRunQuery();
+}
+
+function avResetFilters() {
+  ['av-search','av-f-gene','av-f-chrom','av-f-pos-min','av-f-pos-max',
+   'av-f-csq','av-f-af-max','av-f-cadd-min','av-f-revel-min','av-f-sai-min',
+   'av-f-clin'].forEach(id => document.getElementById(id).value = '');
+  ['av-f-impact','av-f-gt'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('av-f-hide-ref').checked = false;
+  AV_STATE.page = 0;
+  avRunQuery();
+}
+
+// Wire every filter input to re-run the query. Search inputs get debounced so
+// each keystroke doesn't fire a query.
+function avWireFilters() {
+  const debouncedRun = () => {
+    clearTimeout(AV_STATE.searchDebounce);
+    AV_STATE.searchDebounce = setTimeout(() => { AV_STATE.page = 0; avRunQuery(); }, 250);
+  };
+  const ids = ['av-search','av-f-gene','av-f-chrom','av-f-pos-min','av-f-pos-max',
+               'av-f-csq','av-f-af-max','av-f-cadd-min','av-f-revel-min','av-f-sai-min',
+               'av-f-clin'];
+  ids.forEach(id => document.getElementById(id).addEventListener('input', debouncedRun));
+  ['av-f-impact','av-f-gt'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => { AV_STATE.page = 0; avRunQuery(); }));
+  document.getElementById('av-f-hide-ref').addEventListener('change', () => { AV_STATE.page = 0; avRunQuery(); });
+  document.getElementById('av-page-size').addEventListener('change', (e) => {
+    AV_STATE.pageSize = parseInt(e.target.value, 10) || 50;
+    AV_STATE.page = 0;
+    avRunQuery();
+  });
+}
+
+// Export the current filtered view to TSV (capped at 100k rows to keep the
+// browser responsive — that's far past any practical clinical review batch).
+async function avExportTSV() {
+  if (!AV_STATE.initialized) return;
+  const preds = avBuildWhere();
+  const where = preds.length ? 'WHERE ' + preds.join(' AND ') : '';
+  try {
+    const res = await AV_STATE.conn.query(
+      `SELECT * FROM variants ${where} LIMIT 100000`);
+    const rows = res.toArray().map(r => r.toJSON ? r.toJSON() : r);
+    if (rows.length === 0) { alert('No rows to export.'); return; }
+    const cols = Object.keys(rows[0]);
+    // Build TSV. The escape sequences below are doubled in the Python source
+    // so they survive the triple-quoted string interpolation as JS escapes.
+    const lines = [cols.join('\t')];
+    for (const r of rows) {
+      lines.push(cols.map(c => {
+        const v = r[c];
+        if (v === null || v === undefined) return '';
+        const s = typeof v === 'bigint' ? v.toString() : String(v);
+        return s.replace(/\t/g, ' ').replace(/\n/g, ' ');
+      }).join('\t'));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/tab-separated-values' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${DATA.sample || 'variants'}_all_variants_filtered.tsv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Export failed: ' + (err && err.message ? err.message : err));
+  }
+}
+
+// (Lazy-init for All-Variants is handled inside showSection() above.)
+
+// ═══════════════════════════ ALL SVs — DUCKDB-WASM ═══════════════════════════
+//
+// Parallel structure to the All-Variants tab but over the SV Parquet sidecar.
+// Different filter UI (SVTYPE, size range, precise/imprecise) but identical
+// query pipeline: filter inputs → WHERE predicates → COUNT + paginated SELECT.
+
+const SV_STATE = {
+  initialized: false,
+  loading: false,
+  conn: null,
+  total: 0,
+  page: 0,
+  pageSize: 50,
+  sortCol: 'svlen',         // longest SVs first by default — usually most interesting
+  sortAsc: false,
+  lastQueryToken: 0,
+  searchDebounce: null,
+};
+
+function svStatus(title, body, kind) {
+  const box = document.getElementById('sv-status');
+  const t = document.getElementById('sv-status-title');
+  const b = document.getElementById('sv-status-body');
+  box.className = 'clinical-box ' + (kind === 'error' ? 'critical' : kind === 'warn' ? '' : 'info');
+  t.textContent = title || '';
+  b.innerHTML = body || '';
+  box.style.display = title ? '' : 'none';
+}
+
+function svShowControls(show) {
+  document.getElementById('sv-controls').style.display = show ? '' : 'none';
+}
+
+async function svInit() {
+  if (SV_STATE.initialized || SV_STATE.loading) return;
+
+  if (!DATA.sv_parquet_path) {
+    svStatus('Full SV view not available',
+      'The SV Parquet sidecar was not generated when this dashboard was built. ' +
+      'To enable this tab, re-run the dashboard generator with <code>--full-sv-vcf=&lt;path/to/sv.annotated.vcf.gz&gt;</code>. ' +
+      'The filtered SV tab above (ALS-gene + known-SV intersections) works without it.', 'warn');
+    return;
+  }
+
+  SV_STATE.loading = true;
+  svStatus('Loading the SV data layer…',
+    'Pulling DuckDB-WASM and opening <code>' + DATA.sv_parquet_path + '</code>.', 'info');
+
+  try {
+    const { conn } = await duckdbBootstrap();
+    // Resolve to absolute URL — see the comment in avInit for the rationale.
+    const svUrl = new URL(DATA.sv_parquet_path, window.location.href).href;
+    await conn.query(
+      `CREATE OR REPLACE VIEW svs AS
+         SELECT * FROM read_parquet('${svUrl.replace(/'/g, "''")}')`
+    );
+    const totalRes = await conn.query("SELECT COUNT(*) AS n FROM svs");
+    SV_STATE.total = Number(totalRes.toArray()[0].n);
+    document.getElementById('sv-total').textContent = SV_STATE.total.toLocaleString();
+
+    SV_STATE.conn = conn;
+    SV_STATE.initialized = true;
+    SV_STATE.loading = false;
+    svStatus('', '', '');
+    svShowControls(true);
+    svWireFilters();
+    svRunQuery();
+  } catch (err) {
+    SV_STATE.loading = false;
+    svStatus('Could not load the SV Parquet',
+      `<pre style="font-size:12px; white-space:pre-wrap; background:#fef2f2; padding:8px; border-radius:4px;">${(err && err.message) ? err.message : err}</pre>` + duckdbErrorHint(DATA.sv_parquet_path),
+      'error');
+  }
+}
+
+function svBuildWhere() {
+  const preds = [];
+
+  const search = (document.getElementById('sv-search').value || '').trim();
+  if (search) {
+    const s = search.toLowerCase().replace(/'/g, "''");
+    preds.push(`lower(concat_ws('|', gene, hgvsp, hgvsc, consequence, vid, chrom || ':' || pos || '-' || end_pos, svtype)) LIKE '%${s}%'`);
+  }
+  const t = document.getElementById('sv-f-type').value;
+  if (t) preds.push(`svtype = '${t.replace(/'/g, "''")}'`);
+
+  const sMin = parseInt(document.getElementById('sv-f-size-min').value, 10);
+  if (Number.isFinite(sMin)) preds.push(`svlen >= ${sMin}`);
+  const sMax = parseInt(document.getElementById('sv-f-size-max').value, 10);
+  if (Number.isFinite(sMax)) preds.push(`svlen <= ${sMax}`);
+
+  const chrom = (document.getElementById('sv-f-chrom').value || '').trim();
+  if (chrom) {
+    const c = (chrom.startsWith('chr') ? chrom : 'chr' + chrom).replace(/'/g, "''");
+    preds.push(`(chrom = '${c}' OR chrom = '${chrom.replace(/'/g, "''")}')`);
+  }
+  const posMin = parseInt(document.getElementById('sv-f-pos-min').value, 10);
+  if (Number.isFinite(posMin)) preds.push(`pos >= ${posMin}`);
+  const posMax = parseInt(document.getElementById('sv-f-pos-max').value, 10);
+  if (Number.isFinite(posMax)) preds.push(`pos <= ${posMax}`);
+
+  const gene = (document.getElementById('sv-f-gene').value || '').trim();
+  if (gene) preds.push(`upper(gene) = upper('${gene.replace(/'/g, "''")}')`);
+
+
+  const impact = document.getElementById('sv-f-impact').value;
+  if (impact) preds.push(`impact = '${impact.replace(/'/g, "''")}'`);
+
+  const gt = document.getElementById('sv-f-gt').value;
+  if (gt === 'HET') preds.push(`gt IN ('0/1','0|1','1|0')`);
+  else if (gt === 'HOM') preds.push(`gt IN ('1/1','1|1')`);
+  else if (gt === 'NONREF') preds.push(`gt NOT IN ('0/0','./.','0|0','.|.','.','')`);
+
+  const dpMin = parseInt(document.getElementById('sv-f-dp-min').value, 10);
+  if (Number.isFinite(dpMin)) preds.push(`dp >= ${dpMin}`);
+
+  if (document.getElementById('sv-f-pass-only').checked) {
+    preds.push(`(filter = 'PASS' OR filter = '.' OR filter = '')`);
+  }
+  if (document.getElementById('sv-f-precise-only').checked) {
+    preds.push(`precise = TRUE`);
+  }
+
+  return preds;
+}
+
+async function svRunQuery() {
+  if (!SV_STATE.initialized) return;
+  const token = ++SV_STATE.lastQueryToken;
+
+  const preds = svBuildWhere();
+  const where = preds.length ? 'WHERE ' + preds.join(' AND ') : '';
+
+  let orderCols;
+  if (SV_STATE.sortCol === 'chrom,pos') {
+    orderCols = `chrom ${SV_STATE.sortAsc ? 'ASC' : 'DESC'}, pos ${SV_STATE.sortAsc ? 'ASC' : 'DESC'}`;
+  } else {
+    orderCols = `${SV_STATE.sortCol} ${SV_STATE.sortAsc ? 'ASC' : 'DESC'} NULLS LAST, chrom ASC, pos ASC`;
+  }
+
+  const pageSize = SV_STATE.pageSize;
+  const offset = SV_STATE.page * pageSize;
+
+  // Loading indicator while the query runs.
+  document.getElementById('sv-result-summary').textContent = 'Querying…';
+  document.querySelector('#sv-allgenome-table tbody').innerHTML =
+    `<tr><td colspan="13" style="text-align:center; padding:24px; color:#718096;">Loading SVs…</td></tr>`;
+
+  try {
+    const countPromise = SV_STATE.conn.query(
+      `SELECT COUNT(*) AS n FROM svs ${where}`);
+    const rowsPromise = SV_STATE.conn.query(
+      `SELECT * FROM svs ${where} ORDER BY ${orderCols} LIMIT ${pageSize} OFFSET ${offset}`);
+    const [countRes, rowsRes] = await Promise.all([countPromise, rowsPromise]);
+
+    if (token !== SV_STATE.lastQueryToken) return;
+
+    const matched = Number(countRes.toArray()[0].n);
+    const rows = rowsRes.toArray().map(r => r.toJSON ? r.toJSON() : r);
+    svRenderRows(rows);
+    svUpdateSummary(matched);
+  } catch (err) {
+    svStatus('SV query failed',
+      `<pre style="font-size:12px; white-space:pre-wrap;">${(err && err.message) ? err.message : err}</pre>`,
+      'error');
+    document.querySelector('#sv-allgenome-table tbody').innerHTML = '';
+    document.getElementById('sv-result-summary').textContent = 'Query failed — see error above.';
+  }
+}
+
+function svUpdateSummary(matched) {
+  const start = matched === 0 ? 0 : SV_STATE.page * SV_STATE.pageSize + 1;
+  const end = Math.min(matched, (SV_STATE.page + 1) * SV_STATE.pageSize);
+  const pages = Math.max(1, Math.ceil(matched / SV_STATE.pageSize));
+  document.getElementById('sv-result-summary').textContent =
+    `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${matched.toLocaleString()} matching SVs (of ${SV_STATE.total.toLocaleString()} total)`;
+  document.getElementById('sv-page-info').textContent =
+    `page ${SV_STATE.page + 1} / ${pages.toLocaleString()}`;
+  document.getElementById('sv-prev').disabled = SV_STATE.page === 0;
+  document.getElementById('sv-next').disabled = SV_STATE.page >= pages - 1;
+}
+
+// Format SV size with a unit suffix for readability (15.3kb is easier to scan
+// than 15,302). Falls back to raw bp for sizes under 1kb.
+function svFmtSize(n) {
+  if (n === null || n === undefined) return '-';
+  const v = Number(n);
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(2) + ' Mb';
+  if (v >= 1_000)     return (v / 1_000).toFixed(2) + ' kb';
+  return v.toLocaleString() + ' bp';
+}
+
+function svTypeBadge(t) {
+  const cls = t === 'DEL' ? 'high' :
+              t === 'DUP' ? 'moderate' :
+              t === 'INV' ? 'low' :
+              t === 'INS' ? 'tier2' :
+              t === 'BND' ? 'modifier' :
+              'modifier';
+  return `<span class="badge ${cls}">${t || '-'}</span>`;
+}
+
+function svRenderRows(rows) {
+  const tbody = document.querySelector('#sv-allgenome-table tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:24px; color:#718096;">No matching SVs.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(v => {
+    const pos = typeof v.pos === 'bigint' ? Number(v.pos) : v.pos;
+    const end = typeof v.end_pos === 'bigint' ? Number(v.end_pos) : v.end_pos;
+    const svlen = typeof v.svlen === 'bigint' ? Number(v.svlen) : v.svlen;
+    const dp = (v.dp === null || v.dp === undefined) ? null : (typeof v.dp === 'bigint' ? Number(v.dp) : v.dp);
+    const chrom = (v.chrom || '').startsWith('chr') ? v.chrom : 'chr' + (v.chrom || '');
+    return `<tr>
+      <td>${chrom}:${pos ? pos.toLocaleString() : '-'}${end && end !== pos ? '–' + end.toLocaleString() : ''}</td>
+      <td>${svTypeBadge(v.svtype || '')}</td>
+      <td>${svFmtSize(svlen)}</td>
+      <td><strong>${v.gene || '-'}</strong></td>
+      <td class="truncate" title="${(v.consequence || '').replace(/"/g, '&quot;')}">${v.consequence || '-'}</td>
+      <td>${v.impact ? impactBadge(v.impact) : '-'}</td>
+      <td>${gtBadge(v.gt || '')}</td>
+      <td>${dp === null ? '-' : dp.toLocaleString()}</td>
+      <td>${v.ad || '-'}</td>
+      <td>${v.qual !== null && v.qual !== undefined ? Number(v.qual).toFixed(1) : '-'}</td>
+      <td>${v.filter || '-'}</td>
+      <td>${v.precise ? '✓' : '~'}</td>
+      <td class="truncate" title="${(v.vid || '').replace(/"/g, '&quot;')}" style="font-size:11px;">${v.vid || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function svSort(col) {
+  if (SV_STATE.sortCol === col) SV_STATE.sortAsc = !SV_STATE.sortAsc;
+  else { SV_STATE.sortCol = col; SV_STATE.sortAsc = true; }
+  SV_STATE.page = 0;
+  svRunQuery();
+}
+
+function svPage(delta) {
+  SV_STATE.page = Math.max(0, SV_STATE.page + delta);
+  svRunQuery();
+}
+
+function svResetFilters() {
+  ['sv-search','sv-f-size-min','sv-f-size-max','sv-f-chrom','sv-f-pos-min',
+   'sv-f-pos-max','sv-f-gene','sv-f-dp-min'].forEach(id =>
+     document.getElementById(id).value = '');
+  ['sv-f-type','sv-f-impact','sv-f-gt'].forEach(id =>
+    document.getElementById(id).value = '');
+  ['sv-f-pass-only','sv-f-precise-only'].forEach(id =>
+    document.getElementById(id).checked = false);
+  SV_STATE.page = 0;
+  svRunQuery();
+}
+
+function svWireFilters() {
+  const debouncedRun = () => {
+    clearTimeout(SV_STATE.searchDebounce);
+    SV_STATE.searchDebounce = setTimeout(() => { SV_STATE.page = 0; svRunQuery(); }, 250);
+  };
+  ['sv-search','sv-f-size-min','sv-f-size-max','sv-f-chrom','sv-f-pos-min',
+   'sv-f-pos-max','sv-f-gene','sv-f-dp-min'].forEach(id =>
+    document.getElementById(id).addEventListener('input', debouncedRun));
+  ['sv-f-type','sv-f-impact','sv-f-gt'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => { SV_STATE.page = 0; svRunQuery(); }));
+  ['sv-f-pass-only','sv-f-precise-only'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => { SV_STATE.page = 0; svRunQuery(); }));
+  document.getElementById('sv-page-size').addEventListener('change', (e) => {
+    SV_STATE.pageSize = parseInt(e.target.value, 10) || 50;
+    SV_STATE.page = 0;
+    svRunQuery();
+  });
+}
+
+async function svExportTSV() {
+  if (!SV_STATE.initialized) return;
+  const preds = svBuildWhere();
+  const where = preds.length ? 'WHERE ' + preds.join(' AND ') : '';
+  try {
+    const res = await SV_STATE.conn.query(
+      `SELECT * FROM svs ${where} LIMIT 100000`);
+    const rows = res.toArray().map(r => r.toJSON ? r.toJSON() : r);
+    if (rows.length === 0) { alert('No rows to export.'); return; }
+    const cols = Object.keys(rows[0]);
+    // Escape sequences are doubled in the Python source so they survive
+    // triple-quoted-string interpolation. See avExportTSV for the same pattern.
+    const lines = [cols.join('\t')];
+    for (const r of rows) {
+      lines.push(cols.map(c => {
+        const v = r[c];
+        if (v === null || v === undefined) return '';
+        const s = typeof v === 'bigint' ? v.toString() : String(v);
+        return s.replace(/\t/g, ' ').replace(/\n/g, ' ');
+      }).join('\t'));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/tab-separated-values' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${DATA.sample || 'svs'}_all_svs_filtered.tsv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Export failed: ' + (err && err.message ? err.message : err));
+  }
+}
+
+// ═══════════════════════════ INIT ═══════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  renderClinvarTable(DATA.clinvar_variants || []);
+  renderRepeatList();
+  addColumnFilterRow('clinvar-table');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# The synthetic demo Parquets ARE meant to be committed (they're tiny and fake).
+# But never commit a REAL sample. If you swap in real data, give the files
+# distinct names and add them here so they can't be pushed by accident, e.g.:
+# patient*.parquet
+# *real*.parquet
+# *.phi.parquet
