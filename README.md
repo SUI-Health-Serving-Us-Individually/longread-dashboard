@@ -55,6 +55,26 @@ Options:
 ./serve_dashboard.sh --dir /path # serve a different directory
 ```
 
+### Load your own data — in the browser, nothing uploaded
+
+The top of the page has a **"Use your own data"** bar with two file pickers
+(**Variants** and **SVs**). Choose a `.parquet` file and it's read **locally in
+your browser** (via DuckDB-WASM's in-memory filesystem) — **nothing is ever sent
+to a server.** This is the recommended way to look at a real sample.
+
+Loading your own data:
+
+- replaces the synthetic demo with your file in the All Variants / All SVs tab,
+- re-derives the **ClinVar** tab from your variants (pathogenic / likely-pathogenic),
+- clears the synthetic TRGT repeat demo (repeats can't come from a Parquet), and
+- switches the banner to "your own data is loaded locally."
+
+Reload the page to return to the demo. Your files are expected to match the
+[schemas below](#expected-schemas). Because this path downloads/registers the
+whole file in memory, it's best for per-sample Parquets up to a few hundred MB;
+for very large files served over HTTP, the dashboard range-scans instead (see
+[How it works](#how-it-works)).
+
 ### Why a server? Why not just double-click the HTML?
 
 The **All Variants** and **All SVs** tabs read the Parquet sidecars via HTTP

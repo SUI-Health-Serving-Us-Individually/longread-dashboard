@@ -131,7 +131,14 @@
   <div class="subtitle">Synthetic demo dataset &nbsp;|&nbsp; Genome build: GRCh38</div>
 </div>
 
-<div style="background:#fffbeb; border-top:1px solid #f6e05e; border-bottom:1px solid #f6e05e; color:#744210; padding:10px 16px; font-size:13px; text-align:center; line-height:1.5;">⚠️ <strong>Synthetic demo data.</strong> Every variant, structural variant, and repeat genotype shown here is randomly generated for demonstration — <strong>not from any real person.</strong> Replace the data files with your own to use it for real analysis.</div>
+<div id="demo-banner" style="background:#fffbeb; border-top:1px solid #f6e05e; border-bottom:1px solid #f6e05e; color:#744210; padding:10px 16px; font-size:13px; text-align:center; line-height:1.5;">⚠️ <strong>Synthetic demo data.</strong> Every variant, structural variant, and repeat genotype shown here is randomly generated for demonstration — <strong>not from any real person.</strong> Replace the data files with your own to use it for real analysis.</div>
+<div id="user-data-bar" class="no-print" style="background:#f0f9ff; border-bottom:1px solid #bae6fd; color:#0c4a6e; padding:9px 16px; font-size:13px; line-height:1.6; display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px;">
+  <strong>Use your own data:</strong>
+  <span style="color:#075985;">load Parquet files — they stay in your browser, nothing is uploaded.</span>
+  <label style="cursor:pointer;">Variants&nbsp;<input type="file" id="upload-variants" accept=".parquet,.pq" style="font-size:12px;"></label>
+  <label style="cursor:pointer;">SVs&nbsp;<input type="file" id="upload-svs" accept=".parquet,.pq" style="font-size:12px;"></label>
+  <span id="user-data-msg" style="color:#0369a1; font-weight:600;"></span>
+</div>
 <div class="nav no-print">
   <button class="active" onclick="showSection('clinvar')">ClinVar Pathogenic</button>
   <button onclick="showSection('all_variants')">All Variants (Full Genome)</button>
@@ -144,7 +151,7 @@
 <!-- ═══════════════════════════ CLINVAR PATHOGENIC ═══════════════════════════ -->
 <div id="clinvar" class="section active">
   <div class="card">
-    <h2>ClinVar Pathogenic / Likely Pathogenic (8)</h2>
+    <h2 id="clinvar-h2">ClinVar Pathogenic / Likely Pathogenic (8)</h2>
     <p style="font-size:13px; color:#718096; margin-bottom:12px;">Variants carrying pathogenic or likely-pathogenic assertions in ClinVar, reported genome-wide across all genes and conditions.</p>
     <details style="margin:0 0 16px; font-size:12.5px; color:#4a5568;">
       <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Column guide — what each column means</summary>
@@ -1309,6 +1316,194 @@ function duckdbErrorHint(parquetUrl) {
     : `<p style="margin-top:8px;">Check that <code>${parquetUrl}</code> is in the same directory as this HTML and readable by the server.</p>`;
 }
 
+// ───────────────────────── Local "load your own data" ─────────────────────────
+// Files chosen here are read in-browser (File API) and registered directly in
+// DuckDB's in-memory filesystem — nothing is ever uploaded to a server. Loading
+// real data clears the synthetic demo content so the two never mix.
+const USER_DATA = { variants: false, svs: false };
+
+function userDataMsg(text) {
+  const el = document.getElementById('user-data-msg');
+  if (el) el.textContent = text || '';
+}
+
+// Switch tabs programmatically (showSection() relies on a click event.target).
+function activateTab(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b => {
+    b.classList.remove('active');
+    const oc = b.getAttribute('onclick') || '';
+    if (oc.includes(`'${id}'`)) b.classList.add('active');
+  });
+  const sec = document.getElementById(id);
+  if (sec) sec.classList.add('active');
+}
+
+// Finish wiring the All-Variants tab once a `variants` view exists (used by both
+// the demo loader and the user-upload path). Safe to call repeatedly.
+async function avFinish(db, conn) {
+  AV_STATE.db = db;
+  AV_STATE.conn = conn;
+  const totalRes = await conn.query("SELECT COUNT(*) AS n FROM variants");
+  AV_STATE.total = Number(totalRes.toArray()[0].n);
+  document.getElementById('av-total').textContent = AV_STATE.total.toLocaleString();
+
+  // Genotype breakdown for the explanation note — recomputed from whatever data
+  // is loaded. Grouped by genotype (not FILTER), since FILTER labels vary by caller.
+  try {
+    const bd = (await conn.query(
+      `SELECT
+         SUM(CASE WHEN gt IN ('0/0','0|0') THEN 1 ELSE 0 END) AS ref,
+         SUM(CASE WHEN gt IN ('./.','.|.','.','') THEN 1 ELSE 0 END) AS nocall
+       FROM variants`)).toArray()[0];
+    const ref = Number(bd.ref), nocall = Number(bd.nocall);
+    const variant = Math.max(0, AV_STATE.total - ref - nocall);
+    const pct = n => AV_STATE.total ? Math.round(100 * n / AV_STATE.total) : 0;
+    const el = document.getElementById('av-gt-breakdown');
+    if (el) el.innerHTML =
+      ` In this dataset that is <strong>${variant.toLocaleString()}</strong> rows with an alternate allele, ` +
+      `<strong>${ref.toLocaleString()}</strong> reference (<code>0/0</code>, ${pct(ref)}%) and ` +
+      `<strong>${nocall.toLocaleString()}</strong> no-call (<code>./.</code>, ${pct(nocall)}%).`;
+  } catch (e) { /* best-effort */ }
+
+  AV_STATE.initialized = true;
+  AV_STATE.loading = false;
+  avStatus('', '', '');
+  avShowControls(true);
+  if (!AV_STATE.wired) { avWireFilters(); AV_STATE.wired = true; }
+  AV_STATE.page = 0;
+  avRunQuery();
+}
+
+// Same for the All-SVs tab.
+async function svFinish(db, conn) {
+  SV_STATE.db = db;
+  SV_STATE.conn = conn;
+  const totalRes = await conn.query("SELECT COUNT(*) AS n FROM svs");
+  SV_STATE.total = Number(totalRes.toArray()[0].n);
+  document.getElementById('sv-total').textContent = SV_STATE.total.toLocaleString();
+  SV_STATE.initialized = true;
+  SV_STATE.loading = false;
+  svStatus('', '', '');
+  svShowControls(true);
+  if (!SV_STATE.wired) { svWireFilters(); SV_STATE.wired = true; }
+  SV_STATE.page = 0;
+  svRunQuery();
+}
+
+// Re-derive the ClinVar tab from the loaded `variants` view: pathogenic /
+// likely-pathogenic assertions, excluding benign and conflicting.
+async function deriveClinvarFromVariants(conn) {
+  let rows = [];
+  try {
+    rows = (await conn.query(
+      `SELECT coalesce(gene,'') AS gene, coalesce(chrom,'') AS chrom, coalesce(pos,0) AS pos,
+              coalesce(hgvsp,'') AS hgvsp, coalesce(consequence,'') AS consequence,
+              coalesce(impact,'') AS impact, coalesce(gt,'') AS gt,
+              coalesce(clinsig,'') AS clinsig, coalesce(clndn,'') AS clndn,
+              cadd, spliceai, coalesce(spliceai_source,'') AS spliceai_source,
+              gnomadg, coalesce(existing,'') AS existing
+       FROM variants
+       WHERE lower(coalesce(clinsig,'')) LIKE '%pathogenic%'
+         AND lower(coalesce(clinsig,'')) NOT LIKE '%conflicting%'
+         AND lower(coalesce(clinsig,'')) NOT LIKE '%benign%'
+       ORDER BY chrom, pos
+       LIMIT 5000`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
+  } catch (e) { rows = []; }
+  rows.forEach(r => { if (typeof r.pos === 'bigint') r.pos = Number(r.pos); });
+  renderClinvarTable(rows);
+  addColumnFilterRow('clinvar-table');
+  const h2 = document.getElementById('clinvar-h2');
+  if (h2) h2.textContent = `ClinVar Pathogenic / Likely Pathogenic (${rows.length}${rows.length === 5000 ? '+' : ''})`;
+}
+
+// First time any real data is loaded: drop the synthetic banner/TRGT/ClinVar
+// demo content so users never see fake data next to their own.
+function markUserDataLoaded() {
+  const banner = document.getElementById('demo-banner');
+  if (banner) {
+    banner.style.background = '#ecfdf5';
+    banner.style.borderColor = '#6ee7b7';
+    banner.style.color = '#065f46';
+    banner.innerHTML = '🔒 <strong>Your own data is loaded locally.</strong> It is read in your browser only — nothing is uploaded. Reload the page to return to the synthetic demo.';
+  }
+  // TRGT can't come from a Parquet, so clear the demo loci rather than show fake
+  // repeat genotypes next to real variants.
+  DATA.trgt_loci = [];
+  ['trgt-total','trgt-stat-path','trgt-stat-int','trgt-stat-norm','trgt-stat-unk']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '0'; });
+  if (typeof renderRepeatList === 'function') renderRepeatList();
+}
+
+// Read a user-selected File into DuckDB under `fileName`, replacing any prior
+// registration. Returns {db, conn}.
+async function registerUserParquet(file, fileName) {
+  const { db, conn } = await duckdbBootstrap();
+  try { await db.dropFile(fileName); } catch (e) { /* not registered yet */ }
+  const buf = new Uint8Array(await file.arrayBuffer());
+  await db.registerFileBuffer(fileName, buf);
+  return { db, conn };
+}
+
+async function loadUserVariants(file) {
+  if (!file) return;
+  userDataMsg(`Loading ${file.name}…`);
+  try {
+    const { db, conn } = await registerUserParquet(file, 'variants.parquet');
+    await conn.query("CREATE OR REPLACE VIEW variants AS SELECT * FROM read_parquet('variants.parquet')");
+    USER_DATA.variants = true;
+    markUserDataLoaded();
+    await avResetFiltersSilent();
+    await avFinish(db, conn);
+    await deriveClinvarFromVariants(conn);
+    userDataMsg(`✓ Variants loaded (${AV_STATE.total.toLocaleString()} rows).`);
+    activateTab('all_variants');
+  } catch (err) {
+    userDataMsg('');
+    avStatus('Could not load that Parquet',
+      `<pre style="font-size:12px; white-space:pre-wrap; background:#fef2f2; padding:8px; border-radius:4px;">${(err && err.message) ? err.message : err}</pre>`,
+      'error');
+    activateTab('all_variants');
+  }
+}
+
+async function loadUserSvs(file) {
+  if (!file) return;
+  userDataMsg(`Loading ${file.name}…`);
+  try {
+    const { db, conn } = await registerUserParquet(file, 'svs.parquet');
+    await conn.query("CREATE OR REPLACE VIEW svs AS SELECT * FROM read_parquet('svs.parquet')");
+    USER_DATA.svs = true;
+    markUserDataLoaded();
+    if (!USER_DATA.variants) {
+      // No variants uploaded yet — clear the demo ClinVar table rather than leave fakes.
+      const tb = document.querySelector('#clinvar-table tbody');
+      if (tb) tb.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:18px; color:#718096;">Load a variants Parquet to populate ClinVar from your own data.</td></tr>';
+      const h2 = document.getElementById('clinvar-h2');
+      if (h2) h2.textContent = 'ClinVar Pathogenic / Likely Pathogenic';
+    }
+    if (SV_STATE.sortCol) SV_STATE.page = 0;
+    await svFinish(db, conn);
+    userDataMsg(`✓ SVs loaded (${SV_STATE.total.toLocaleString()} rows).`);
+    activateTab('all_svs');
+  } catch (err) {
+    userDataMsg('');
+    svStatus('Could not load that Parquet',
+      `<pre style="font-size:12px; white-space:pre-wrap; background:#fef2f2; padding:8px; border-radius:4px;">${(err && err.message) ? err.message : err}</pre>`,
+      'error');
+    activateTab('all_svs');
+  }
+}
+
+// Clear AV filter inputs without triggering a query (avResetFilters runs one).
+async function avResetFiltersSilent() {
+  ['av-search','av-f-gene','av-f-chrom','av-f-pos-min','av-f-pos-max',
+   'av-f-csq','av-f-af-max','av-f-cadd-min','av-f-revel-min','av-f-sai-min',
+   'av-f-clin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['av-f-impact','av-f-gt'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const hr = document.getElementById('av-f-hide-ref'); if (hr) hr.checked = false;
+}
+
 async function avInit() {
   if (AV_STATE.initialized || AV_STATE.loading) return;
 
@@ -1338,36 +1533,7 @@ async function avInit() {
     // URL, so we resolve it against the page URL first.
     const parquetUrl = new URL(DATA.parquet_path, window.location.href).href;
     await duckdbAttachParquet(db, conn, parquetUrl, 'variants', 'variants.parquet');
-    const totalRes = await conn.query("SELECT COUNT(*) AS n FROM variants");
-    AV_STATE.total = Number(totalRes.toArray()[0].n);
-    document.getElementById('av-total').textContent = AV_STATE.total.toLocaleString();
-
-    // Fill the genotype breakdown in the explanation note from whatever Parquet
-    // is loaded (sample-agnostic). Grouped by genotype rather than by FILTER,
-    // since FILTER labels like RefCall/NoCall are caller-specific.
-    try {
-      const bd = (await conn.query(
-        `SELECT
-           SUM(CASE WHEN gt IN ('0/0','0|0') THEN 1 ELSE 0 END) AS ref,
-           SUM(CASE WHEN gt IN ('./.','.|.','.','') THEN 1 ELSE 0 END) AS nocall
-         FROM variants`)).toArray()[0];
-      const ref = Number(bd.ref), nocall = Number(bd.nocall);
-      const variant = Math.max(0, AV_STATE.total - ref - nocall);
-      const pct = n => AV_STATE.total ? Math.round(100 * n / AV_STATE.total) : 0;
-      const el = document.getElementById('av-gt-breakdown');
-      if (el) el.innerHTML =
-        ` In this dataset that is <strong>${variant.toLocaleString()}</strong> rows with an alternate allele, ` +
-        `<strong>${ref.toLocaleString()}</strong> reference (<code>0/0</code>, ${pct(ref)}%) and ` +
-        `<strong>${nocall.toLocaleString()}</strong> no-call (<code>./.</code>, ${pct(nocall)}%).`;
-    } catch (e) { /* breakdown is best-effort — ignore if columns differ */ }
-
-    AV_STATE.conn = conn;
-    AV_STATE.initialized = true;
-    AV_STATE.loading = false;
-    avStatus('', '', '');
-    avShowControls(true);
-    avWireFilters();
-    avRunQuery();
+    await avFinish(db, conn);
   } catch (err) {
     AV_STATE.loading = false;
     avStatus('Could not load the variant Parquet',
@@ -1668,17 +1834,7 @@ async function svInit() {
     // Resolve to absolute URL — see the comment in avInit for the rationale.
     const svUrl = new URL(DATA.sv_parquet_path, window.location.href).href;
     await duckdbAttachParquet(db, conn, svUrl, 'svs', 'svs.parquet');
-    const totalRes = await conn.query("SELECT COUNT(*) AS n FROM svs");
-    SV_STATE.total = Number(totalRes.toArray()[0].n);
-    document.getElementById('sv-total').textContent = SV_STATE.total.toLocaleString();
-
-    SV_STATE.conn = conn;
-    SV_STATE.initialized = true;
-    SV_STATE.loading = false;
-    svStatus('', '', '');
-    svShowControls(true);
-    svWireFilters();
-    svRunQuery();
+    await svFinish(db, conn);
   } catch (err) {
     SV_STATE.loading = false;
     svStatus('Could not load the SV Parquet',
@@ -1925,6 +2081,12 @@ document.addEventListener('DOMContentLoaded', () => {
   renderClinvarTable(DATA.clinvar_variants || []);
   renderRepeatList();
   addColumnFilterRow('clinvar-table');
+
+  // Wire the "load your own data" file inputs (local, in-browser only).
+  const upV = document.getElementById('upload-variants');
+  if (upV) upV.addEventListener('change', e => { if (e.target.files[0]) loadUserVariants(e.target.files[0]); });
+  const upS = document.getElementById('upload-svs');
+  if (upS) upS.addEventListener('change', e => { if (e.target.files[0]) loadUserSvs(e.target.files[0]); });
 });
 </script>
 </body>
