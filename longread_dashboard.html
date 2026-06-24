@@ -157,7 +157,7 @@
       <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Column guide — what each column means</summary>
       <dl style="margin:10px 0 0; display:grid; grid-template-columns:max-content 1fr; gap:5px 14px;">
         <dt style="font-weight:600; color:#2d3748;">Gene</dt><dd style="margin:0;">Gene symbol the variant overlaps (VEP).</dd>
-        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position on GRCh38.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position on GRCh38; the cell links out to the variant in gnomAD.</dd>
         <dt style="font-weight:600; color:#2d3748;">Protein</dt><dd style="margin:0;">Protein-level change in HGVS notation (p.…), for coding variants.</dd>
         <dt style="font-weight:600; color:#2d3748;">Consequence</dt><dd style="margin:0;">Predicted functional effect (VEP / Sequence Ontology term, e.g. missense_variant, stop_gained).</dd>
         <dt style="font-weight:600; color:#2d3748;">Impact</dt><dd style="margin:0;">VEP severity class: HIGH / MODERATE / LOW / MODIFIER.</dd>
@@ -167,8 +167,8 @@
         <dt style="font-weight:600; color:#2d3748;">CADD</dt><dd style="margin:0;">CADD Phred deleteriousness score (~20 ≈ top 1% most deleterious, ≥30 ≈ top 0.1%).</dd>
         <dt style="font-weight:600; color:#2d3748;">SpliceAI</dt><dd style="margin:0;">Maximum SpliceAI delta score, 0–1; ≥0.5 likely splice-altering.</dd>
         <dt style="font-weight:600; color:#2d3748;">gnomAD</dt><dd style="margin:0;">Population allele frequency (gnomAD genomes). Blank ≈ not observed (novel / very rare).</dd>
-        <dt style="font-weight:600; color:#2d3748;">dbSNP</dt><dd style="margin:0;">Known variant identifier (dbSNP rsID). Blank = not previously catalogued.</dd>
-        <dt style="font-weight:600; color:#2d3748;">Location (hg19)</dt><dd style="margin:0;">Same locus lifted to GRCh37/hg19, for cross-referencing hg19-based resources (e.g. ALSoD). Shown only when the Parquet carries a <code>pos_hg19</code> column — see the README.</dd>
+        <dt style="font-weight:600; color:#2d3748;">dbSNP</dt><dd style="margin:0;">Known variant identifier (dbSNP rsID), linked to dbSNP. Blank = not previously catalogued.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location (hg19)</dt><dd style="margin:0;">Same locus lifted to GRCh37/hg19, for cross-referencing hg19-based resources (e.g. ALSoD); links to the UCSC browser (hg19). Shown only when the Parquet carries a <code>pos_hg19</code> column — see the README.</dd>
       </dl>
     </details>
     <div class="filter-bar">
@@ -238,7 +238,7 @@
       <summary style="cursor:pointer; color:#3182ce; font-weight:600;">Column guide — what each column means</summary>
       <dl style="margin:10px 0 0; display:grid; grid-template-columns:max-content 1fr; gap:5px 14px;">
         <dt style="font-weight:600; color:#2d3748;">Gene</dt><dd style="margin:0;">Gene symbol the variant overlaps (VEP). Blank for intergenic positions.</dd>
-        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position on GRCh38.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location</dt><dd style="margin:0;">Chromosome and position on GRCh38; the cell links out to the variant in gnomAD.</dd>
         <dt style="font-weight:600; color:#2d3748;">Protein</dt><dd style="margin:0;">Protein-level change in HGVS notation (p.…), for coding variants.</dd>
         <dt style="font-weight:600; color:#2d3748;">Consequence</dt><dd style="margin:0;">Predicted functional effect (VEP / Sequence Ontology term, e.g. missense_variant, stop_gained, intron_variant).</dd>
         <dt style="font-weight:600; color:#2d3748;">Impact</dt><dd style="margin:0;">VEP severity class: HIGH (likely disruptive, e.g. loss-of-function), MODERATE (e.g. missense), LOW (e.g. synonymous), MODIFIER (non-coding / intronic).</dd>
@@ -250,8 +250,8 @@
         <dt style="font-weight:600; color:#2d3748;">PolyPhen</dt><dd style="margin:0;">PolyPhen-2 missense prediction: “probably/possibly damaging” vs “benign” (higher score = more damaging).</dd>
         <dt style="font-weight:600; color:#2d3748;">gnomAD</dt><dd style="margin:0;">Population allele frequency (gnomAD genomes). Blank ≈ not observed in gnomAD (novel / very rare).</dd>
         <dt style="font-weight:600; color:#2d3748;">ClinVar</dt><dd style="margin:0;">ClinVar clinical-significance assertion (e.g. pathogenic, likely_pathogenic, benign, conflicting), where the position is in ClinVar.</dd>
-        <dt style="font-weight:600; color:#2d3748;">dbSNP / IDs</dt><dd style="margin:0;">Known variant identifiers (dbSNP rsIDs and other database IDs). Blank = not previously catalogued.</dd>
-        <dt style="font-weight:600; color:#2d3748;">Location (hg19)</dt><dd style="margin:0;">Same locus lifted to GRCh37/hg19, for cross-referencing hg19-based resources (e.g. ALSoD). Shown only when the Parquet carries a <code>pos_hg19</code> column — see the README.</dd>
+        <dt style="font-weight:600; color:#2d3748;">dbSNP / IDs</dt><dd style="margin:0;">Known variant identifiers (dbSNP rsIDs, linked to dbSNP). Blank = not previously catalogued.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location (hg19)</dt><dd style="margin:0;">Same locus lifted to GRCh37/hg19, for cross-referencing hg19-based resources (e.g. ALSoD); links to the UCSC browser (hg19). Shown only when the Parquet carries a <code>pos_hg19</code> column — see the README.</dd>
       </dl>
     </details>
     <div id="av-status" class="clinical-box info" style="display:none;">
@@ -649,7 +649,7 @@ function renderClinvarTable(variants) {
   const tbody = document.querySelector('#clinvar-table tbody');
   tbody.innerHTML = variants.map(v => `<tr>
     <td><strong>${v.gene}</strong></td>
-    <td>${v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom}:${v.pos.toLocaleString()}</td>
+    <td>${extA(gnomadHref(v.chrom, v.pos, v.ref, v.alt), (v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom)+':'+v.pos.toLocaleString(), 'View in gnomAD (GRCh38)')}</td>
     <td class="truncate" title="${v.hgvsp}">${v.hgvsp || '-'}</td>
     <td>${v.consequence}</td>
     <td>${impactBadge(v.impact)}</td>
@@ -659,8 +659,8 @@ function renderClinvarTable(variants) {
     <td>${fmtScore(v.cadd)}</td>
     <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
     <td>${fmtAF(v.gnomadg)}</td>
-    <td>${v.existing || '-'}</td>
-    <td>${(v.pos_hg19 !== null && v.pos_hg19 !== undefined) ? ((v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom) + ':' + Number(v.pos_hg19).toLocaleString()) : '—'}</td>
+    <td>${linkifyDbsnp(v.existing)}</td>
+    <td>${(v.pos_hg19 !== null && v.pos_hg19 !== undefined) ? extA(ucscHref('hg19', v.chrom, Number(v.pos_hg19)), (v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom) + ':' + Number(v.pos_hg19).toLocaleString(), 'View in UCSC browser (hg19)') : '—'}</td>
   </tr>`).join('');
 }
 
@@ -1684,6 +1684,34 @@ function avUpdateSummary(matched) {
   document.getElementById('av-next').disabled = AV_STATE.page >= pages - 1;
 }
 
+// ── External cross-reference links (gnomAD, UCSC, dbSNP) ──────────────────────
+function stripChr(c) { return (c || '').replace(/^chr/i, ''); }
+function withChr(c) { return (c || '').startsWith('chr') ? c : 'chr' + (c || ''); }
+function extA(href, text, title) {
+  return href ? `<a href="${href}" target="_blank" rel="noopener" title="${title || ''}">${text}</a>` : text;
+}
+// gnomAD: variant page when ref/alt are known (GRCh38), else a region page.
+function gnomadHref(chrom, pos, ref, alt) {
+  const c = stripChr(chrom); if (!c || !pos) return null;
+  return (ref && alt)
+    ? `https://gnomad.broadinstitute.org/variant/${c}-${pos}-${ref}-${alt}?dataset=gnomad_r4`
+    : `https://gnomad.broadinstitute.org/region/${c}-${pos}-${pos}?dataset=gnomad_r4`;
+}
+// UCSC genome browser at a single position, on a given build (hg38 / hg19).
+function ucscHref(build, chrom, pos) {
+  if (!pos) return null;
+  return `https://genome.ucsc.edu/cgi-bin/hgTracks?db=${build}&position=${withChr(chrom)}:${pos}-${pos}`;
+}
+// Turn an "existing IDs" string (e.g. "rs123;rs456&COSV...") into dbSNP links.
+function linkifyDbsnp(existing) {
+  if (!existing) return '-';
+  return existing.split(/[;,&| ]+/).filter(Boolean).map(id =>
+    /^rs\d+$/i.test(id)
+      ? `<a href="https://www.ncbi.nlm.nih.gov/snp/${id}" target="_blank" rel="noopener">${id}</a>`
+      : id
+  ).join(', ');
+}
+
 function avRenderRows(rows) {
   const tbody = document.querySelector('#av-table tbody');
   if (rows.length === 0) {
@@ -1701,8 +1729,8 @@ function avRenderRows(rows) {
     const chrom = (v.chrom || '').startsWith('chr') ? v.chrom : 'chr' + (v.chrom || '');
     return `<tr>
       <td><strong>${v.gene || '-'}</strong></td>
-      <td>${chrom}:${pos ? pos.toLocaleString() : '-'}</td>
-      <td>${posHg19 ? chrom + ':' + posHg19.toLocaleString() : '—'}</td>
+      <td>${pos ? extA(gnomadHref(v.chrom, pos, v.ref, v.alt), chrom + ':' + pos.toLocaleString(), 'View in gnomAD (GRCh38)') : '-'}</td>
+      <td>${posHg19 ? extA(ucscHref('hg19', v.chrom, posHg19), chrom + ':' + posHg19.toLocaleString(), 'View in UCSC browser (hg19)') : '—'}</td>
       <td class="truncate" title="${(v.hgvsp || '').replace(/"/g, '&quot;')}">${v.hgvsp || '-'}</td>
       <td>${v.consequence || '-'}</td>
       <td>${impactBadge(v.impact || '')}</td>
@@ -1714,7 +1742,7 @@ function avRenderRows(rows) {
       <td>${v.polyphen || '-'}</td>
       <td>${fmtAF(af)}</td>
       <td>${clinsigBadge(v.clinsig || '')}</td>
-      <td class="truncate" title="${(v.existing || '').replace(/"/g, '&quot;')}">${v.existing || '-'}</td>
+      <td class="truncate" title="${(v.existing || '').replace(/"/g, '&quot;')}">${linkifyDbsnp(v.existing)}</td>
     </tr>`;
   }).join('');
 }

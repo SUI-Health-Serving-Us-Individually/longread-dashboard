@@ -111,6 +111,7 @@ longread_dashboard_public/
 ├── longread_dashboard_assets/
 │   └── trgt/                       # synthetic placeholder waterfall plots (SVG)
 ├── serve_dashboard.sh             # local HTTP server with range-request support
+├── add_hg19.py                    # add a pos_hg19 column to a Parquet/TSV via liftOver
 ├── LICENSE                        # MIT © 2026 SUI Health
 └── README.md
 ```
@@ -308,21 +309,32 @@ You cannot convert hg38 → hg19 by arithmetic — it requires a **liftOver** (a
 region-specific remapping). The dashboard therefore shows an hg19 position only
 if your Parquet carries a `pos_hg19` column.
 
-To add `pos_hg19`, lift your VCF before building the Parquet — e.g. with
-[CrossMap](https://crossmap.readthedocs.io/) and the UCSC chain file:
+**Easiest way — the bundled `add_hg19.py` script.** It lifts each row and adds
+the `pos_hg19` column to a Parquet (or TSV) in place:
 
 ```bash
-# Download the hg38→hg19 chain once:
-#   https://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
-CrossMap vcf hg38ToHg19.over.chain.gz annotated.vcf.gz hg19.fa lifted_hg19.vcf
+pip install pyliftover pyarrow
+python add_hg19.py --in variants.parquet --out variants.parquet
+# (downloads the UCSC hg38→hg19 chain automatically the first time;
+#  pass --chain hg38ToHg19.over.chain.gz to run offline)
 ```
 
-Then carry the hg19 position alongside the hg38 record. The simplest approach is
-to add it as a column when you flatten the VCF (see
-[Build your own Parquet](#build-your-own-parquet-from-pacbio-data)) — match
-lifted records back to the hg38 rows by variant key (`chrom:pos:ref:alt`) and
-emit the hg19 coordinate as `pos_hg19`. (Picard `LiftoverVcf` works too; some
-positions won't lift and will simply be blank in the column.)
+Then reload the dashboard and load that Parquet — the **Location (hg19)** column
+fills in, and each hg19 cell links straight to the UCSC browser (hg19).
+
+For allele-level correctness (re-validating ref/alt against the hg19 sequence),
+use a full VCF liftover instead — e.g.
+[CrossMap](https://crossmap.readthedocs.io/) or Picard `LiftoverVcf` — and carry
+the lifted position into the Parquet as `pos_hg19`. Positions that don't lift are
+left blank and show as "—".
+
+### Quick cross-reference links
+
+Each row links out to make checking against external databases one click:
+
+- **Location (hg38)** → the variant (or region) in **gnomAD** (GRCh38),
+- **Location (hg19)** → the locus in the **UCSC browser** (hg19),
+- **dbSNP / IDs** → each rsID on **dbSNP**.
 
 > The hg19 values in the bundled demo are **placeholder offsets**, not a real
 > liftOver — the demo data is synthetic.
