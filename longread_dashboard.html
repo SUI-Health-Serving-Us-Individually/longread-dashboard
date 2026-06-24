@@ -1264,6 +1264,42 @@ async function duckdbBootstrap() {
   return DUCKDB_STATE.initPromise;
 }
 
+// Attach a Parquet file as a DuckDB view, choosing how based on file size.
+//
+//   Small files  → download the whole file once and register the bytes in
+//                  DuckDB's in-memory filesystem, then query that.
+//   Large files  → let DuckDB HTTP range-scan the URL directly, so we never
+//                  pull hundreds of MB up front.
+//
+// Why the split: HTTP range reads break when a static host gzip-encodes the
+// file AND applies Range to the *compressed* bytes (GitHub Pages / Fastly do
+// this for .parquet). DuckDB then reads a corrupt footer and fails with
+// "No magic bytes found at end of file" — notably in Firefox. A full GET
+// decompresses cleanly in every browser, so for small demo-sized files we just
+// download the whole thing. Large real datasets should be served uncompressed
+// with byte-range support (serve_dashboard.sh does), where range-scanning works.
+const DUCKDB_SMALL_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
+async function duckdbAttachParquet(db, conn, url, viewName, fileName) {
+  let sizeBytes = Infinity;
+  try {
+    const head = await fetch(url, { method: 'HEAD' });
+    const len = head.headers.get('content-length');
+    if (len) sizeBytes = parseInt(len, 10);
+  } catch (e) { /* fall through to range path */ }
+
+  if (sizeBytes <= DUCKDB_SMALL_FILE_BYTES) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${url}`);
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    await db.registerFileBuffer(fileName, buf);
+    await conn.query(
+      `CREATE OR REPLACE VIEW ${viewName} AS SELECT * FROM read_parquet('${fileName.replace(/'/g, "''")}')`);
+  } else {
+    await conn.query(
+      `CREATE OR REPLACE VIEW ${viewName} AS SELECT * FROM read_parquet('${url.replace(/'/g, "''")}')`);
+  }
+}
+
 // Shared error-presentation helper. Translates the typical failure modes
 // (file:// protocol, missing parquet, network error) into user-facing hints.
 function duckdbErrorHint(parquetUrl) {
@@ -1294,22 +1330,14 @@ async function avInit() {
     '<code>' + DATA.parquet_path + '</code>. First load can take 1–2 seconds.', 'info');
 
   try {
-    const { conn } = await duckdbBootstrap();
+    const { db, conn } = await duckdbBootstrap();
 
-    // Register the parquet as a view. DuckDB's read_parquet supports HTTP
-    // range scans, so this is cheap — we don't actually pull data yet.
-    //
-    // IMPORTANT: DuckDB-WASM treats a bare filename like "als_variants.parquet"
-    // as a pattern in its virtual filesystem, NOT a URL — so it never makes an
-    // HTTP request and fails with "No files found that match the pattern".
-    // We resolve the relative path against the current page URL to get an
-    // absolute http:// URL, which DuckDB recognizes as a remote resource and
-    // fetches via the httpfs extension.
+    // Attach the parquet as the `variants` view (full-download for small files,
+    // HTTP range-scan for large ones — see duckdbAttachParquet). The absolute
+    // URL matters: DuckDB treats a bare filename as a virtual-FS pattern, not a
+    // URL, so we resolve it against the page URL first.
     const parquetUrl = new URL(DATA.parquet_path, window.location.href).href;
-    await conn.query(
-      `CREATE OR REPLACE VIEW variants AS
-         SELECT * FROM read_parquet('${parquetUrl.replace(/'/g, "''")}')`
-    );
+    await duckdbAttachParquet(db, conn, parquetUrl, 'variants', 'variants.parquet');
     const totalRes = await conn.query("SELECT COUNT(*) AS n FROM variants");
     AV_STATE.total = Number(totalRes.toArray()[0].n);
     document.getElementById('av-total').textContent = AV_STATE.total.toLocaleString();
@@ -1636,13 +1664,10 @@ async function svInit() {
     'Pulling DuckDB-WASM and opening <code>' + DATA.sv_parquet_path + '</code>.', 'info');
 
   try {
-    const { conn } = await duckdbBootstrap();
+    const { db, conn } = await duckdbBootstrap();
     // Resolve to absolute URL — see the comment in avInit for the rationale.
     const svUrl = new URL(DATA.sv_parquet_path, window.location.href).href;
-    await conn.query(
-      `CREATE OR REPLACE VIEW svs AS
-         SELECT * FROM read_parquet('${svUrl.replace(/'/g, "''")}')`
-    );
+    await duckdbAttachParquet(db, conn, svUrl, 'svs', 'svs.parquet');
     const totalRes = await conn.query("SELECT COUNT(*) AS n FROM svs");
     SV_STATE.total = Number(totalRes.toArray()[0].n);
     document.getElementById('sv-total').textContent = SV_STATE.total.toLocaleString();
