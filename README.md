@@ -265,6 +265,7 @@ optional columns simply render blank.
 | `gnomadg`, `gnomade`, `max_af` | population allele frequencies |
 | `clinsig`, `clndn` | ClinVar significance and disease |
 | `existing` | known variant IDs (dbSNP rsIDs, etc.) |
+| `pos_hg19` | *(optional)* GRCh37/hg19 position — populates the "Location (hg19)" column. See [Comparing to ALSoD](#comparing-to-alsod--lifting-to-hg19). |
 
 **`svs.parquet`** — one row per structural-variant call:
 
@@ -288,6 +289,43 @@ them for a new sample:
   `<DATA.sample>.<TRID>.waterfall.svg` (the demo uses the prefix `DEMO`, so files
   are `DEMO.<TRID>.waterfall.svg`). Keep `DATA.sample` and the filename prefix in
   sync.
+
+---
+
+## Comparing to ALSoD / lifting to hg19
+
+[ALSoD](https://alsod.ac.uk/) (the ALS Online Database) is organised **by gene**
+and lists reported mutations largely by **protein change** and **rsID**. So the
+most reliable way to check a variant against ALSoD is to match on **gene +
+protein change (HGVS p.)** and **dbSNP rsID** — all of which the dashboard
+already shows and lets you filter/search. Workflow: open **All Variants**, set
+the **Gene** filter to an ALS gene, and compare the Protein / dbSNP columns to
+that gene's ALSoD page.
+
+For **coordinate-level** checks, note that ALSoD and many older ALS resources use
+**GRCh37 / hg19**, while this dashboard (and PacBio pipelines) use **GRCh38**.
+You cannot convert hg38 → hg19 by arithmetic — it requires a **liftOver** (a
+region-specific remapping). The dashboard therefore shows an hg19 position only
+if your Parquet carries a `pos_hg19` column.
+
+To add `pos_hg19`, lift your VCF before building the Parquet — e.g. with
+[CrossMap](https://crossmap.readthedocs.io/) and the UCSC chain file:
+
+```bash
+# Download the hg38→hg19 chain once:
+#   https://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
+CrossMap vcf hg38ToHg19.over.chain.gz annotated.vcf.gz hg19.fa lifted_hg19.vcf
+```
+
+Then carry the hg19 position alongside the hg38 record. The simplest approach is
+to add it as a column when you flatten the VCF (see
+[Build your own Parquet](#build-your-own-parquet-from-pacbio-data)) — match
+lifted records back to the hg38 rows by variant key (`chrom:pos:ref:alt`) and
+emit the hg19 coordinate as `pos_hg19`. (Picard `LiftoverVcf` works too; some
+positions won't lift and will simply be blank in the column.)
+
+> The hg19 values in the bundled demo are **placeholder offsets**, not a real
+> liftOver — the demo data is synthetic.
 
 ---
 

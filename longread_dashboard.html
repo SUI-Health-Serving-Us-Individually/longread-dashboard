@@ -168,6 +168,7 @@
         <dt style="font-weight:600; color:#2d3748;">SpliceAI</dt><dd style="margin:0;">Maximum SpliceAI delta score, 0–1; ≥0.5 likely splice-altering.</dd>
         <dt style="font-weight:600; color:#2d3748;">gnomAD</dt><dd style="margin:0;">Population allele frequency (gnomAD genomes). Blank ≈ not observed (novel / very rare).</dd>
         <dt style="font-weight:600; color:#2d3748;">dbSNP</dt><dd style="margin:0;">Known variant identifier (dbSNP rsID). Blank = not previously catalogued.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location (hg19)</dt><dd style="margin:0;">Same locus lifted to GRCh37/hg19, for cross-referencing hg19-based resources (e.g. ALSoD). Shown only when the Parquet carries a <code>pos_hg19</code> column — see the README.</dd>
       </dl>
     </details>
     <div class="filter-bar">
@@ -192,6 +193,7 @@
           <th onclick="sortTable('clinvar-table',9)">SpliceAI</th>
           <th onclick="sortTable('clinvar-table',10)">gnomAD</th>
           <th onclick="sortTable('clinvar-table',11)">dbSNP</th>
+          <th onclick="sortTable('clinvar-table',12)" title="GRCh37 / hg19 position — shown when a pos_hg19 column is present">Location (hg19)</th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -249,6 +251,7 @@
         <dt style="font-weight:600; color:#2d3748;">gnomAD</dt><dd style="margin:0;">Population allele frequency (gnomAD genomes). Blank ≈ not observed in gnomAD (novel / very rare).</dd>
         <dt style="font-weight:600; color:#2d3748;">ClinVar</dt><dd style="margin:0;">ClinVar clinical-significance assertion (e.g. pathogenic, likely_pathogenic, benign, conflicting), where the position is in ClinVar.</dd>
         <dt style="font-weight:600; color:#2d3748;">dbSNP / IDs</dt><dd style="margin:0;">Known variant identifiers (dbSNP rsIDs and other database IDs). Blank = not previously catalogued.</dd>
+        <dt style="font-weight:600; color:#2d3748;">Location (hg19)</dt><dd style="margin:0;">Same locus lifted to GRCh37/hg19, for cross-referencing hg19-based resources (e.g. ALSoD). Shown only when the Parquet carries a <code>pos_hg19</code> column — see the README.</dd>
       </dl>
     </details>
     <div id="av-status" class="clinical-box info" style="display:none;">
@@ -309,7 +312,8 @@
         <table id="av-table">
           <thead><tr>
             <th data-col="gene"        onclick="avSort('gene')">Gene <span class="sort-arrow">↕</span></th>
-            <th data-col="chrom,pos"   onclick="avSort('chrom,pos')">Location</th>
+            <th data-col="chrom,pos"   onclick="avSort('chrom,pos')">Location (hg38)</th>
+            <th title="GRCh37 / hg19 position — shown only when the Parquet carries a pos_hg19 column (see README → Comparing to ALSoD)">Location (hg19)</th>
             <th data-col="hgvsp"       onclick="avSort('hgvsp')">Protein</th>
             <th data-col="consequence" onclick="avSort('consequence')">Consequence</th>
             <th data-col="impact"      onclick="avSort('impact')">Impact</th>
@@ -547,7 +551,7 @@
 </div><!-- container -->
 <script>
 // ═══════════════════════════ DATA ═══════════════════════════
-const DATA = {"sample":"DEMO","date":"","parquet_size_mb":249.5,"sv_parquet_size_mb":8.9,"trgt_loci":[{"trid":"HTT","chrom":"chr4","pos":3074877,"end":3075420,"motifs":"CAG","gt":"1/2","al":[51,543],"allr":"51-53, 543-548","sd":[25,17],"mc":[17,181],"ms":"CAG","ap":[0.98,0.92],"am":[],"max_mc":181,"status":"pathogenic","status_label":"Demo: expanded (CAG)","status_category":"pathogenic"},{"trid":"C9orf72","chrom":"chr9","pos":27573484,"end":27575962,"motifs":"GGGGCC","gt":"1/2","al":[96,2478],"allr":"96-98, 2478-2483","sd":[10,9],"mc":[16,413],"ms":"GGGGCC","ap":[0.97,0.95],"am":[],"max_mc":413,"status":"intermediate","status_label":"Demo: intermediate","status_category":"intermediate"},{"trid":"FMR1","chrom":"chrX","pos":147912050,"end":147912086,"motifs":"CGG","gt":"1/2","al":[21,36],"allr":"21-23, 36-41","sd":[11,20],"mc":[7,12],"ms":"CGG","ap":[0.93,0.93],"am":[],"max_mc":12,"status":"normal","status_label":"","status_category":"normal"},{"trid":"ATXN2","chrom":"chr12","pos":111598950,"end":111598998,"motifs":"CAG","gt":"1/2","al":[48,30],"allr":"48-50, 30-35","sd":[19,19],"mc":[16,10],"ms":"CAG","ap":[0.92,0.85],"am":[],"max_mc":16,"status":"normal","status_label":"","status_category":"normal"},{"trid":"DMPK","chrom":"chr19","pos":45770205,"end":45770277,"motifs":"CTG","gt":"1/2","al":[21,72],"allr":"21-23, 72-77","sd":[13,25],"mc":[7,24],"ms":"CTG","ap":[0.97,0.83],"am":[],"max_mc":24,"status":"unknown","status_label":"","status_category":"unknown"},{"trid":"FXN","chrom":"chr9","pos":69037286,"end":69037337,"motifs":"GAA","gt":"1/2","al":[51,39],"allr":"51-53, 39-44","sd":[25,15],"mc":[17,13],"ms":"GAA","ap":[0.97,0.97],"am":[],"max_mc":17,"status":"unknown","status_label":"","status_category":"unknown"}],"clinvar_variants":[{"gene":"BRCA1","chrom":"chr1","pos":1000000,"hgvsp":"p.Gly200Asp","consequence":"missense_variant","impact":"MODERATE","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":31.1,"spliceai":0.1,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000000"},{"gene":"BRCA2","chrom":"chr2","pos":1137311,"hgvsp":"p.Arg107Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":30.2,"spliceai":0.36,"spliceai_source":"demo","gnomadg":8.7e-05,"existing":"rs9000111"},{"gene":"CFTR","chrom":"chr3","pos":1274622,"hgvsp":"p.Gly210Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":20.4,"spliceai":0.09,"spliceai_source":"demo","gnomadg":0.000505,"existing":"rs9000222"},{"gene":"TP53","chrom":"chr4","pos":1411933,"hgvsp":"p.Arg121Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":30.7,"spliceai":0.28,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000333"},{"gene":"MLH1","chrom":"chr5","pos":1549244,"hgvsp":"p.Gly220Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":26.7,"spliceai":0.11,"spliceai_source":"demo","gnomadg":0.000869,"existing":"rs9000444"},{"gene":"LDLR","chrom":"chr6","pos":1686555,"hgvsp":"p.Arg135Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"likely_pathogenic","clndn":"Synthetic_demo_condition","cadd":25.1,"spliceai":0.06,"spliceai_source":"demo","gnomadg":0.000957,"existing":"rs9000555"},{"gene":"HFE","chrom":"chr7","pos":1823866,"hgvsp":"p.Gly230Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":21.4,"spliceai":0.04,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000666"},{"gene":"PAH","chrom":"chr8","pos":1961177,"hgvsp":"p.Arg149Ter","consequence":"stop_gained","impact":"HIGH","gt":"1/1","clinsig":"likely_pathogenic","clndn":"Synthetic_demo_condition","cadd":32.1,"spliceai":0.29,"spliceai_source":"demo","gnomadg":0.000536,"existing":"rs9000777"}],"parquet_path":"variants.parquet","sv_parquet_path":"svs.parquet","trgt_plot_prefix":"longread_dashboard_assets/trgt/"};
+const DATA = {"sample":"DEMO","date":"","parquet_size_mb":249.5,"sv_parquet_size_mb":8.9,"trgt_loci":[{"trid":"HTT","chrom":"chr4","pos":3074877,"end":3075420,"motifs":"CAG","gt":"1/2","al":[51,543],"allr":"51-53, 543-548","sd":[25,17],"mc":[17,181],"ms":"CAG","ap":[0.98,0.92],"am":[],"max_mc":181,"status":"pathogenic","status_label":"Demo: expanded (CAG)","status_category":"pathogenic"},{"trid":"C9orf72","chrom":"chr9","pos":27573484,"end":27575962,"motifs":"GGGGCC","gt":"1/2","al":[96,2478],"allr":"96-98, 2478-2483","sd":[10,9],"mc":[16,413],"ms":"GGGGCC","ap":[0.97,0.95],"am":[],"max_mc":413,"status":"intermediate","status_label":"Demo: intermediate","status_category":"intermediate"},{"trid":"FMR1","chrom":"chrX","pos":147912050,"end":147912086,"motifs":"CGG","gt":"1/2","al":[21,36],"allr":"21-23, 36-41","sd":[11,20],"mc":[7,12],"ms":"CGG","ap":[0.93,0.93],"am":[],"max_mc":12,"status":"normal","status_label":"","status_category":"normal"},{"trid":"ATXN2","chrom":"chr12","pos":111598950,"end":111598998,"motifs":"CAG","gt":"1/2","al":[48,30],"allr":"48-50, 30-35","sd":[19,19],"mc":[16,10],"ms":"CAG","ap":[0.92,0.85],"am":[],"max_mc":16,"status":"normal","status_label":"","status_category":"normal"},{"trid":"DMPK","chrom":"chr19","pos":45770205,"end":45770277,"motifs":"CTG","gt":"1/2","al":[21,72],"allr":"21-23, 72-77","sd":[13,25],"mc":[7,24],"ms":"CTG","ap":[0.97,0.83],"am":[],"max_mc":24,"status":"unknown","status_label":"","status_category":"unknown"},{"trid":"FXN","chrom":"chr9","pos":69037286,"end":69037337,"motifs":"GAA","gt":"1/2","al":[51,39],"allr":"51-53, 39-44","sd":[25,15],"mc":[17,13],"ms":"GAA","ap":[0.97,0.97],"am":[],"max_mc":17,"status":"unknown","status_label":"","status_category":"unknown"}],"clinvar_variants":[{"gene":"BRCA1","chrom":"chr1","pos":1000000,"hgvsp":"p.Gly200Asp","consequence":"missense_variant","impact":"MODERATE","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":31.1,"spliceai":0.1,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000000","pos_hg19":1100000},{"gene":"BRCA2","chrom":"chr2","pos":1137311,"hgvsp":"p.Arg107Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":30.2,"spliceai":0.36,"spliceai_source":"demo","gnomadg":8.7e-05,"existing":"rs9000111","pos_hg19":1237311},{"gene":"CFTR","chrom":"chr3","pos":1274622,"hgvsp":"p.Gly210Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":20.4,"spliceai":0.09,"spliceai_source":"demo","gnomadg":0.000505,"existing":"rs9000222","pos_hg19":1374622},{"gene":"TP53","chrom":"chr4","pos":1411933,"hgvsp":"p.Arg121Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":30.7,"spliceai":0.28,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000333","pos_hg19":1511933},{"gene":"MLH1","chrom":"chr5","pos":1549244,"hgvsp":"p.Gly220Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":26.7,"spliceai":0.11,"spliceai_source":"demo","gnomadg":0.000869,"existing":"rs9000444","pos_hg19":1649244},{"gene":"LDLR","chrom":"chr6","pos":1686555,"hgvsp":"p.Arg135Ter","consequence":"stop_gained","impact":"HIGH","gt":"0/1","clinsig":"likely_pathogenic","clndn":"Synthetic_demo_condition","cadd":25.1,"spliceai":0.06,"spliceai_source":"demo","gnomadg":0.000957,"existing":"rs9000555","pos_hg19":1786555},{"gene":"HFE","chrom":"chr7","pos":1823866,"hgvsp":"p.Gly230Asp","consequence":"missense_variant","impact":"MODERATE","gt":"1/1","clinsig":"pathogenic","clndn":"Synthetic_demo_condition","cadd":21.4,"spliceai":0.04,"spliceai_source":"demo","gnomadg":null,"existing":"rs9000666","pos_hg19":1923866},{"gene":"PAH","chrom":"chr8","pos":1961177,"hgvsp":"p.Arg149Ter","consequence":"stop_gained","impact":"HIGH","gt":"1/1","clinsig":"likely_pathogenic","clndn":"Synthetic_demo_condition","cadd":32.1,"spliceai":0.29,"spliceai_source":"demo","gnomadg":0.000536,"existing":"rs9000777","pos_hg19":2061177}],"parquet_path":"variants.parquet","sv_parquet_path":"svs.parquet","trgt_plot_prefix":"longread_dashboard_assets/trgt/"};
 
 // ═══════════════════════════ NAVIGATION ═══════════════════════════
 function showSection(id) {
@@ -656,6 +660,7 @@ function renderClinvarTable(variants) {
     <td>${fmtSpliceAI(v.spliceai, v.spliceai_source)}</td>
     <td>${fmtAF(v.gnomadg)}</td>
     <td>${v.existing || '-'}</td>
+    <td>${(v.pos_hg19 !== null && v.pos_hg19 !== undefined) ? ((v.chrom.startsWith('chr') ? v.chrom : 'chr'+v.chrom) + ':' + Number(v.pos_hg19).toLocaleString()) : '—'}</td>
   </tr>`).join('');
 }
 
@@ -1394,23 +1399,33 @@ async function svFinish(db, conn) {
 // Re-derive the ClinVar tab from the loaded `variants` view: pathogenic /
 // likely-pathogenic assertions, excluding benign and conflicting.
 async function deriveClinvarFromVariants(conn) {
+  const base =
+    `coalesce(gene,'') AS gene, coalesce(chrom,'') AS chrom, coalesce(pos,0) AS pos,
+     coalesce(hgvsp,'') AS hgvsp, coalesce(consequence,'') AS consequence,
+     coalesce(impact,'') AS impact, coalesce(gt,'') AS gt,
+     coalesce(clinsig,'') AS clinsig, coalesce(clndn,'') AS clndn,
+     cadd, spliceai, coalesce(spliceai_source,'') AS spliceai_source,
+     gnomadg, coalesce(existing,'') AS existing`;
+  const tail =
+    `FROM variants
+     WHERE lower(coalesce(clinsig,'')) LIKE '%pathogenic%'
+       AND lower(coalesce(clinsig,'')) NOT LIKE '%conflicting%'
+       AND lower(coalesce(clinsig,'')) NOT LIKE '%benign%'
+     ORDER BY chrom, pos
+     LIMIT 5000`;
   let rows = [];
   try {
-    rows = (await conn.query(
-      `SELECT coalesce(gene,'') AS gene, coalesce(chrom,'') AS chrom, coalesce(pos,0) AS pos,
-              coalesce(hgvsp,'') AS hgvsp, coalesce(consequence,'') AS consequence,
-              coalesce(impact,'') AS impact, coalesce(gt,'') AS gt,
-              coalesce(clinsig,'') AS clinsig, coalesce(clndn,'') AS clndn,
-              cadd, spliceai, coalesce(spliceai_source,'') AS spliceai_source,
-              gnomadg, coalesce(existing,'') AS existing
-       FROM variants
-       WHERE lower(coalesce(clinsig,'')) LIKE '%pathogenic%'
-         AND lower(coalesce(clinsig,'')) NOT LIKE '%conflicting%'
-         AND lower(coalesce(clinsig,'')) NOT LIKE '%benign%'
-       ORDER BY chrom, pos
-       LIMIT 5000`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
-  } catch (e) { rows = []; }
-  rows.forEach(r => { if (typeof r.pos === 'bigint') r.pos = Number(r.pos); });
+    // Include the optional hg19 column when the Parquet carries it.
+    rows = (await conn.query(`SELECT ${base}, pos_hg19 ${tail}`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
+  } catch (e) {
+    try {
+      rows = (await conn.query(`SELECT ${base} ${tail}`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
+    } catch (e2) { rows = []; }
+  }
+  rows.forEach(r => {
+    if (typeof r.pos === 'bigint') r.pos = Number(r.pos);
+    if (typeof r.pos_hg19 === 'bigint') r.pos_hg19 = Number(r.pos_hg19);
+  });
   renderClinvarTable(rows);
   addColumnFilterRow('clinvar-table');
   const h2 = document.getElementById('clinvar-h2');
@@ -1478,7 +1493,7 @@ async function loadUserSvs(file) {
     if (!USER_DATA.variants) {
       // No variants uploaded yet — clear the demo ClinVar table rather than leave fakes.
       const tb = document.querySelector('#clinvar-table tbody');
-      if (tb) tb.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:18px; color:#718096;">Load a variants Parquet to populate ClinVar from your own data.</td></tr>';
+      if (tb) tb.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:18px; color:#718096;">Load a variants Parquet to populate ClinVar from your own data.</td></tr>';
       const h2 = document.getElementById('clinvar-h2');
       if (h2) h2.textContent = 'ClinVar Pathogenic / Likely Pathogenic';
     }
@@ -1632,7 +1647,7 @@ async function avRunQuery() {
   // the page is broken.
   document.getElementById('av-result-summary').textContent = 'Querying…';
   document.querySelector('#av-table tbody').innerHTML =
-    `<tr><td colspan="14" style="text-align:center; padding:24px; color:#718096;">Loading variants…</td></tr>`;
+    `<tr><td colspan="15" style="text-align:center; padding:24px; color:#718096;">Loading variants…</td></tr>`;
 
   // Two queries: a COUNT(*) for the result summary, and a windowed SELECT for
   // the visible page. DuckDB plans both against the same row-group set so the
@@ -1672,7 +1687,7 @@ function avUpdateSummary(matched) {
 function avRenderRows(rows) {
   const tbody = document.querySelector('#av-table tbody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:24px; color:#718096;">No matching variants.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; padding:24px; color:#718096;">No matching variants.</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(v => {
@@ -1682,9 +1697,12 @@ function avRenderRows(rows) {
     const revel = (v.revel === null || v.revel === undefined) ? null : Number(v.revel);
     const sai = (v.spliceai === null || v.spliceai === undefined) ? null : Number(v.spliceai);
     const af = (v.gnomadg === null || v.gnomadg === undefined) ? null : Number(v.gnomadg);
+    const posHg19 = (v.pos_hg19 === null || v.pos_hg19 === undefined) ? null : Number(v.pos_hg19);
+    const chrom = (v.chrom || '').startsWith('chr') ? v.chrom : 'chr' + (v.chrom || '');
     return `<tr>
       <td><strong>${v.gene || '-'}</strong></td>
-      <td>${(v.chrom || '').startsWith('chr') ? v.chrom : 'chr' + (v.chrom || '')}:${pos ? pos.toLocaleString() : '-'}</td>
+      <td>${chrom}:${pos ? pos.toLocaleString() : '-'}</td>
+      <td>${posHg19 ? chrom + ':' + posHg19.toLocaleString() : '—'}</td>
       <td class="truncate" title="${(v.hgvsp || '').replace(/"/g, '&quot;')}">${v.hgvsp || '-'}</td>
       <td>${v.consequence || '-'}</td>
       <td>${impactBadge(v.impact || '')}</td>
