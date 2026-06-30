@@ -1377,10 +1377,13 @@ async function avFinish(db, conn) {
   // Genotype breakdown for the explanation note — recomputed from whatever data
   // is loaded. Grouped by genotype (not FILTER), since FILTER labels vary by caller.
   try {
+    // COUNT(*) FILTER returns BIGINT (int64). Do NOT use SUM(CASE…), which
+    // returns HUGEINT (int128) — duckdb-wasm's Arrow layer misreads int128 into
+    // JS as astronomical garbage (e.g. 1.5e25 rows, percentages over 10^20%).
     const bd = (await conn.query(
       `SELECT
-         SUM(CASE WHEN gt IN ('0/0','0|0') THEN 1 ELSE 0 END) AS ref,
-         SUM(CASE WHEN gt IN ('./.','.|.','.','') THEN 1 ELSE 0 END) AS nocall
+         COUNT(*) FILTER (WHERE gt IN ('0/0','0|0')) AS ref,
+         COUNT(*) FILTER (WHERE gt IN ('./.','.|.','.','')) AS nocall
        FROM variants`)).toArray()[0];
     const ref = Number(bd.ref), nocall = Number(bd.nocall);
     const variant = Math.max(0, AV_STATE.total - ref - nocall);
