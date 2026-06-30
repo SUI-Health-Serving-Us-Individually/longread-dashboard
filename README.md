@@ -163,6 +163,27 @@ The genome-wide tabs are driven entirely by two Parquet files. Below is an
 end-to-end recipe to produce them from raw **PacBio HiFi** reads. The tool
 versions are examples; newer releases generally work.
 
+> ### ⚡ Shortcut: convert a VEP VCF to `variants.parquet` in the browser
+> If you already have a **VEP-annotated VCF**, you can skip the
+> `bcftools +split-vep` → TSV → Parquet steps (sections 3–4 below). The page has
+> a **"build a Parquet from VEP output"** bar: pick your `.vcf` / `.vcf.gz`, the
+> dashboard reads the `CSQ` header, auto-maps the VEP sub-fields to the schema
+> (you can adjust the mapping), and DuckDB-WASM writes `variants.parquet` —
+> **entirely in your browser, nothing uploaded.** Then download it or load it
+> straight into the All Variants tab.
+>
+> - Handles `.vcf` and bgzipped `.vcf.gz`; auto-detects CSQ field names across
+>   VEP versions (e.g. `CADD_PHRED`, `SpliceAI_pred_DS_*`, `ClinVar_CLNSIG`).
+> - Emits one row per transcript consequence (like `split-vep -d`), or tick
+>   **"one row per variant"** to keep only the canonical / MANE transcript.
+> - Best for **per-sample / filtered** VCFs. A whole-genome VCF (millions of
+>   records) is slow and memory-heavy in a browser tab — use the CLI recipe
+>   below for those, and for **SVs** (`svs.parquet` uses a different schema and
+>   isn't covered by the button yet).
+>
+> The CLI recipe below remains the reference path and the right tool for
+> genome-scale or scripted/reproducible builds.
+
 ### 1. Call variants from HiFi reads
 
 ```bash

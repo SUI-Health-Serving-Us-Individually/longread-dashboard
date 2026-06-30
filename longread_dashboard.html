@@ -139,6 +139,27 @@
   <label style="cursor:pointer;">SVs&nbsp;<input type="file" id="upload-svs" accept=".parquet,.pq" style="font-size:12px;"></label>
   <span id="user-data-msg" style="color:#0369a1; font-weight:600;"></span>
 </div>
+<div id="vcf-conv-bar" class="no-print" style="background:#f5f3ff; border-bottom:1px solid #ddd6fe; color:#4c1d95; padding:9px 16px; font-size:13px; line-height:1.6; display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px;">
+  <strong>Or build a Parquet from VEP output:</strong>
+  <span style="color:#5b21b6;">convert a VEP-annotated <code>.vcf</code> / <code>.vcf.gz</code> into <code>variants.parquet</code> — entirely in your browser, nothing is uploaded.</span>
+  <label style="cursor:pointer;">VEP VCF&nbsp;<input type="file" id="vcf-conv-file" accept=".vcf,.vcf.gz,.gz,.bgz" style="font-size:12px;"></label>
+  <span id="vcf-conv-msg" style="color:#6d28d9; font-weight:600;"></span>
+</div>
+<div id="vcf-conv-panel" class="no-print" style="display:none; background:#faf5ff; border-bottom:1px solid #e9d5ff; color:#4c1d95; padding:11px 16px; font-size:12.5px; line-height:1.55;">
+  <div id="vcf-conv-summary" style="margin-bottom:9px;"></div>
+  <details style="margin-bottom:10px;">
+    <summary style="cursor:pointer; color:#7c3aed; font-weight:600;">Adjust field mapping (auto-detected from the CSQ header — only change if a column looks wrong)</summary>
+    <div id="vcf-conv-mapping" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:7px 20px; margin-top:11px;"></div>
+  </details>
+  <label style="display:inline-flex; align-items:center; gap:6px; margin-right:20px;"><input type="checkbox" id="vcf-conv-canonical"> One row per variant (canonical / MANE transcript only — smaller output)</label>
+  <button id="vcf-conv-go" style="background:#7c3aed; color:#fff; border:none; padding:6px 16px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer;">Convert to Parquet</button>
+  <button id="vcf-conv-cancel" style="display:none; margin-left:8px; background:#fff; color:#7c2d12; border:1px solid #fca5a5; padding:6px 13px; border-radius:5px; font-size:12.5px; font-weight:600; cursor:pointer;">Cancel</button>
+  <span id="vcf-conv-progress" style="margin-left:12px; color:#6d28d9;"></span>
+  <div id="vcf-conv-bar-wrap" style="display:none; margin-top:9px; height:10px; background:#ede9fe; border-radius:6px; overflow:hidden;">
+    <div id="vcf-conv-bar-fill" style="height:100%; width:0%; background:#7c3aed; transition:width .2s ease;"></div>
+  </div>
+  <div id="vcf-conv-result" style="margin-top:11px;"></div>
+</div>
 <div class="nav no-print">
   <button class="active" onclick="showSection('clinvar')">ClinVar Pathogenic</button>
   <button onclick="showSection('all_variants')">All Variants (Full Genome)</button>
@@ -1399,13 +1420,24 @@ async function svFinish(db, conn) {
 // Re-derive the ClinVar tab from the loaded `variants` view: pathogenic /
 // likely-pathogenic assertions, excluding benign and conflicting.
 async function deriveClinvarFromVariants(conn) {
+  // Discover which columns the loaded `variants` view actually has, so optional
+  // ones (spliceai_source, pos_hg19) that a user's Parquet — or the VCF→Parquet
+  // converter — may not carry don't break the query with a binder error.
+  let cols = new Set();
+  try {
+    (await conn.query("DESCRIBE variants")).toArray()
+      .forEach(r => { const o = r.toJSON ? r.toJSON() : r; if (o.column_name) cols.add(o.column_name); });
+  } catch (e) { /* DESCRIBE unsupported → assume all present (old behavior) */ }
+  const has = c => cols.size === 0 || cols.has(c);
+  const saiSrc = has('spliceai_source') ? "coalesce(spliceai_source,'')" : "''";
   const base =
     `coalesce(gene,'') AS gene, coalesce(chrom,'') AS chrom, coalesce(pos,0) AS pos,
      coalesce(hgvsp,'') AS hgvsp, coalesce(consequence,'') AS consequence,
      coalesce(impact,'') AS impact, coalesce(gt,'') AS gt,
      coalesce(clinsig,'') AS clinsig, coalesce(clndn,'') AS clndn,
-     cadd, spliceai, coalesce(spliceai_source,'') AS spliceai_source,
+     cadd, spliceai, ${saiSrc} AS spliceai_source,
      gnomadg, coalesce(existing,'') AS existing`;
+  const sel = has('pos_hg19') ? `${base}, pos_hg19` : base;
   const tail =
     `FROM variants
      WHERE lower(coalesce(clinsig,'')) LIKE '%pathogenic%'
@@ -1415,13 +1447,8 @@ async function deriveClinvarFromVariants(conn) {
      LIMIT 5000`;
   let rows = [];
   try {
-    // Include the optional hg19 column when the Parquet carries it.
-    rows = (await conn.query(`SELECT ${base}, pos_hg19 ${tail}`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
-  } catch (e) {
-    try {
-      rows = (await conn.query(`SELECT ${base} ${tail}`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
-    } catch (e2) { rows = []; }
-  }
+    rows = (await conn.query(`SELECT ${sel} ${tail}`)).toArray().map(r => r.toJSON ? r.toJSON() : r);
+  } catch (e) { rows = []; }
   rows.forEach(r => {
     if (typeof r.pos === 'bigint') r.pos = Number(r.pos);
     if (typeof r.pos_hg19 === 'bigint') r.pos_hg19 = Number(r.pos_hg19);
@@ -2123,6 +2150,483 @@ async function svExportTSV() {
 }
 
 // ═══════════════════════════ INIT ═══════════════════════════
+// ═══════════════════════ VEP VCF → Parquet converter ═══════════════════════
+// Replaces the `bcftools +split-vep → TSV → DuckDB` recipe with an in-browser
+// button. The VEP-annotated VCF is read locally (File API), the CSQ string is
+// flattened into the dashboard's column schema, and DuckDB-WASM writes the
+// Parquet — nothing is ever uploaded. Best for per-sample / filtered VCFs;
+// whole-genome files are slow and memory-heavy in a tab (the CLI recipe in the
+// README stays the fallback for those).
+
+// Output schema — must match what the All-Variants tab and variants.parquet
+// expect (see README "Expected schemas").
+const VCFCONV_COLS = [
+  ['chrom','VARCHAR'],['pos','BIGINT'],['ref','VARCHAR'],['alt','VARCHAR'],
+  ['qual','DOUBLE'],['filter','VARCHAR'],['gene','VARCHAR'],['consequence','VARCHAR'],
+  ['impact','VARCHAR'],['biotype','VARCHAR'],['hgvsp','VARCHAR'],['hgvsc','VARCHAR'],
+  ['mane','VARCHAR'],['exon','VARCHAR'],['gt','VARCHAR'],['sift','VARCHAR'],
+  ['polyphen','VARCHAR'],['cadd','DOUBLE'],['revel','DOUBLE'],['spliceai','DOUBLE'],
+  ['existing','VARCHAR'],['gnomadg','DOUBLE'],['gnomade','DOUBLE'],['max_af','DOUBLE'],
+  ['clinsig','VARCHAR'],['clndn','VARCHAR']
+];
+// Columns filled straight from the fixed VCF columns / FORMAT (not from CSQ).
+const VCFCONV_FIXED = new Set(['chrom','pos','ref','alt','qual','filter','gt']);
+// CSQ-derived columns: which VEP CSQ sub-field to pull, and whether it's numeric.
+// `tokens` are matched against the CSQ Format names (exact → endsWith → contains,
+// case-insensitive) so version-specific names (e.g. ClinVar_CLNSIG) still map.
+const VCFCONV_CSQ_MAP = {
+  gene:        {tokens:['symbol','gene_symbol'], num:false},
+  consequence: {tokens:['consequence'], num:false},
+  impact:      {tokens:['impact'], num:false},
+  biotype:     {tokens:['biotype'], num:false},
+  hgvsp:       {tokens:['hgvsp'], num:false},
+  hgvsc:       {tokens:['hgvsc'], num:false},
+  mane:        {tokens:['mane_select','mane'], num:false},
+  exon:        {tokens:['exon'], num:false},
+  sift:        {tokens:['sift'], num:false},
+  polyphen:    {tokens:['polyphen'], num:false},
+  cadd:        {tokens:['cadd_phred','cadd_raw','cadd'], num:true},
+  revel:       {tokens:['revel'], num:true},
+  spliceai:    {tokens:[], num:true, splice:true},   // special: max of DS_* fields
+  existing:    {tokens:['existing_variation','existing'], num:false},
+  gnomadg:     {tokens:['gnomadg_af','gnomad_genomes_af','gnomadg'], num:true},
+  gnomade:     {tokens:['gnomade_af','gnomad_exomes_af','gnomade'], num:true},
+  max_af:      {tokens:['max_af'], num:true},
+  clinsig:     {tokens:['clnsig','clin_sig'], num:false},
+  clndn:       {tokens:['clndn'], num:false}
+};
+
+const VCFCONV = { file:null, csqId:'CSQ', csqFields:[], sampleCols:[], dsIdx:[],
+                  canonIdx:-1, maneIdx:-1, isSV:false, running:false, abort:false,
+                  bytesSeen:0 };
+
+function vcfConvMsg(t){ const e=document.getElementById('vcf-conv-msg'); if(e) e.textContent=t||''; }
+function vcfConvProgress(t){ const e=document.getElementById('vcf-conv-progress'); if(e) e.textContent=t||''; }
+function vcfConvBar(frac){ // frac in [0,1]; null hides the bar
+  const wrap = document.getElementById('vcf-conv-bar-wrap');
+  const fill = document.getElementById('vcf-conv-bar-fill');
+  if (!wrap || !fill) return;
+  if (frac == null){ wrap.style.display = 'none'; fill.style.width = '0%'; return; }
+  wrap.style.display = 'block';
+  fill.style.width = Math.max(0, Math.min(100, frac*100)).toFixed(1) + '%';
+}
+
+// Decompression. VEP/bcftools `.vcf.gz` files are almost always **BGZF** — a
+// long run of concatenated gzip blocks — and the browser's
+// DecompressionStream('gzip') decodes only the FIRST member ("Junk found after
+// end of compressed data" on the second). So we detect BGZF and decode it
+// block-by-block (each block is an independent gzip member), which also keeps
+// memory bounded — we never hold the whole file. Plain single-member gzip and
+// uncompressed text use a normal streaming pass.
+//
+//   mode: 'text' | 'gzip' | 'bgzf'
+async function vcfMode(file){
+  const head = new Uint8Array(await file.slice(0, 18).arrayBuffer());
+  if (!(head[0] === 0x1f && head[1] === 0x8b)) return 'text';
+  // FEXTRA flag (bit 2) → likely BGZF (samtools/bcftools/bgzip set it; the
+  // `gzip` utility does not). Treat any gzip-with-extra as BGZF to be safe.
+  return (head[3] & 4) ? 'bgzf' : 'gzip';
+}
+function vcfConcat(a, b){
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0); out.set(b, a.length);
+  return out;
+}
+// Total length (bytes) of the BGZF block starting at `off`, from its BSIZE
+// extra subfield; -1 if this isn't a BGZF block.
+function vcfBgzfBlockLen(buf, off){
+  if (!(buf[off] === 0x1f && buf[off+1] === 0x8b)) return -1;
+  if (!(buf[off+3] & 4)) return -1;
+  const xlen = buf[off+10] | (buf[off+11] << 8);
+  let p = off + 12; const end = p + xlen;
+  while (p + 4 <= end){
+    const slen = buf[p+2] | (buf[p+3] << 8);
+    if (buf[p] === 66 && buf[p+1] === 67) return (buf[p+4] | (buf[p+5] << 8)) + 1; // 'BC'
+    p += 4 + slen;
+  }
+  return -1;
+}
+// Inflate one gzip member fully to a Uint8Array.
+async function vcfInflateMember(bytes){
+  const ds = new DecompressionStream('gzip');
+  const w = ds.writable.getWriter(); w.write(bytes); w.close();
+  const r = ds.readable.getReader();
+  const parts = []; let total = 0;
+  for (;;){ const { done, value } = await r.read(); if (done) break; parts.push(value); total += value.length; }
+  const out = new Uint8Array(total); let o = 0;
+  for (const p of parts){ out.set(p, o); o += p.length; }
+  return out;
+}
+// Stream decompressed byte chunks for any mode (bounded memory).
+async function* vcfByteChunks(file, mode, onBytes){
+  if (mode === 'bgzf'){
+    const reader = file.stream().getReader();
+    let pending = new Uint8Array(0), consumed = 0, done = false;
+    const pull = async () => { const { done:d, value } = await reader.read(); if (d) done = true; else pending = vcfConcat(pending, value); };
+    while (true){
+      while (!done && pending.length < 18) await pull();
+      if (pending.length === 0) break;
+      const blen = vcfBgzfBlockLen(pending, 0);
+      if (blen < 0) throw new Error('Not a valid BGZF block — if this was made with plain `gzip`, feed the uncompressed .vcf instead.');
+      while (!done && pending.length < blen) await pull();
+      if (pending.length < blen) break; // truncated tail
+      const block = pending.subarray(0, blen);
+      pending = pending.slice(blen);
+      consumed += blen; if (onBytes) onBytes(consumed);
+      const out = await vcfInflateMember(block);
+      if (out.length) yield out; // BGZF EOF marker is an empty block → skipped
+    }
+    try { await reader.cancel(); } catch(e){}
+    return;
+  }
+  let s = file.stream();
+  if (onBytes){
+    let seen = 0;
+    s = s.pipeThrough(new TransformStream({
+      transform(chunk, ctrl){ seen += chunk.byteLength; onBytes(seen); ctrl.enqueue(chunk); }
+    }));
+  }
+  if (mode === 'gzip') s = s.pipeThrough(new DecompressionStream('gzip'));
+  const r = s.getReader();
+  for (;;){ const { done, value } = await r.read(); if (done) break; yield value; }
+}
+async function* vcfLines(file, mode, onBytes){
+  const decoder = new TextDecoder();
+  let buf = '';
+  for await (const chunk of vcfByteChunks(file, mode, onBytes)){
+    buf += decoder.decode(chunk, { stream:true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      let line = buf.slice(0, nl);
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      yield line;
+      buf = buf.slice(nl + 1);
+    }
+  }
+  buf += decoder.decode();
+  if (buf.length) yield buf.replace(/\r$/, '');
+}
+
+// Match a list of candidate tokens against the CSQ field names.
+function vcfMatchField(tokens, lowerFields){
+  for (const t of tokens){ const i = lowerFields.indexOf(t); if (i>=0) return i; }
+  for (const t of tokens){ const i = lowerFields.findIndex(x=>x.endsWith(t)); if (i>=0) return i; }
+  for (const t of tokens){ const i = lowerFields.findIndex(x=>x.includes(t)); if (i>=0) return i; }
+  return -1;
+}
+
+// Phase 1: scan only the header to learn the CSQ field order and sample columns.
+async function vcfScanHeader(file, mode){
+  let csqLine = '', chromLine = '', hasSVTYPE = false;
+  for await (const line of vcfLines(file, mode)){
+    if (line.startsWith('##')){
+      if (line.includes('ID=CSQ') || (line.includes('Format:') && /consequence/i.test(line))){
+        if (!csqLine || line.includes('Ensembl VEP') || /Format:/.test(line)) csqLine = line;
+      }
+      if (/ID=SVTYPE/.test(line)) hasSVTYPE = true;
+      continue;
+    }
+    if (line.startsWith('#CHROM')){ chromLine = line; break; }
+    if (!line.startsWith('#')) break; // body started without a #CHROM line
+  }
+  // CSQ INFO id + field list.
+  let csqId = 'CSQ', fields = [];
+  if (csqLine){
+    const idm = csqLine.match(/ID=([^,]+)/); if (idm) csqId = idm[1];
+    const fm = csqLine.match(/Format:\s*([^"]+)/);
+    if (fm) fields = fm[1].trim().replace(/>$/,'').split('|').map(s=>s.trim());
+  }
+  const cols = chromLine ? chromLine.replace(/^#/, '').split('\t') : [];
+  const sampleCols = cols.slice(9); // columns after FORMAT
+  return { csqId, fields, sampleCols, hasSVTYPE };
+}
+
+// Resolve the spliceai DS_* / canonical / mane field indices used during parsing.
+function vcfDeriveSpecialIdx(fields){
+  const lf = fields.map(f=>f.toLowerCase());
+  const dsIdx = [];
+  lf.forEach((f,i)=>{ if (f.includes('spliceai') && /ds_(ag|al|dg|dl)/.test(f)) dsIdx.push(i); });
+  if (!dsIdx.length){ const i = lf.findIndex(x=>x.includes('spliceai')); if (i>=0) dsIdx.push(i); }
+  return { dsIdx, canonIdx: lf.indexOf('canonical'), maneIdx: vcfMatchField(['mane_select','mane'], lf) };
+}
+
+// Build the editable mapping UI + a plain-language summary.
+function vcfBuildMappingUI(){
+  const fields = VCFCONV.csqFields, lf = fields.map(f=>f.toLowerCase());
+  const wrap = document.getElementById('vcf-conv-mapping');
+  wrap.innerHTML = '';
+  const unmapped = [];
+  Object.keys(VCFCONV_CSQ_MAP).forEach(target => {
+    const cfg = VCFCONV_CSQ_MAP[target];
+    const sel = document.createElement('select');
+    sel.id = 'vcf-map-' + target;
+    sel.style.cssText = 'font-size:12px; max-width:170px;';
+    const opts = [];
+    opts.push('<option value="-1">(none)</option>');
+    if (cfg.splice && VCFCONV.dsIdx.length) opts.push('<option value="__splice__">(max SpliceAI delta)</option>');
+    fields.forEach((f,i)=> opts.push(`<option value="${i}">${f}</option>`));
+    sel.innerHTML = opts.join('');
+    // default selection
+    let def = '-1';
+    if (cfg.splice){ def = VCFCONV.dsIdx.length ? '__splice__' : '-1'; }
+    else { const i = vcfMatchField(cfg.tokens, lf); if (i>=0) def = String(i); }
+    sel.value = def;
+    if (def === '-1') unmapped.push(target);
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex; align-items:center; gap:6px; justify-content:space-between;';
+    row.innerHTML = `<span style="font-weight:600;">${target}</span>`;
+    row.appendChild(sel);
+    wrap.appendChild(row);
+  });
+  const summary = document.getElementById('vcf-conv-summary');
+  const sampleNote = VCFCONV.sampleCols.length
+    ? `genotype (<code>gt</code>) from sample <strong>${VCFCONV.sampleCols[0]}</strong>` + (VCFCONV.sampleCols.length>1 ? ` (of ${VCFCONV.sampleCols.length}; first used)` : '')
+    : 'no sample column found — <code>gt</code> will be blank';
+  let html = `Detected <strong>${VCFCONV.csqFields.length}</strong> VEP CSQ fields (INFO/<code>${VCFCONV.csqId}</code>). ` +
+             `<code>chrom/pos/ref/alt/qual/filter</code> come from the VCF columns; ${sampleNote}.`;
+  if (unmapped.length) html += `<br><span style="color:#b45309;">⚠️ Could not auto-map: <strong>${unmapped.join(', ')}</strong> — these columns will be blank unless you set them above (your VEP run may not include those plugins).</span>`;
+  if (VCFCONV.isSV) html += `<br><span style="color:#b45309;">⚠️ This looks like a <strong>structural-variant</strong> VCF (has SVTYPE). This button produces the <em>small-variant</em> schema; SV→Parquet uses a different schema and isn't built in yet — use the CLI recipe for <code>svs.parquet</code>.</span>`;
+  summary.innerHTML = html;
+}
+
+// Read current mapping selections into {target: {idx, splice}}.
+function vcfReadMapping(){
+  const m = {};
+  Object.keys(VCFCONV_CSQ_MAP).forEach(target => {
+    const sel = document.getElementById('vcf-map-' + target);
+    const v = sel ? sel.value : '-1';
+    if (v === '__splice__') m[target] = { idx:-1, splice:true };
+    else m[target] = { idx: parseInt(v,10), splice:false };
+  });
+  return m;
+}
+
+function vcfCell(raw){ // sanitize a value for a tab-delimited cell
+  if (raw == null || raw === '' || raw === '.') return '';
+  return String(raw).replace(/[\t\n\r]/g, ' ');
+}
+function vcfNumCell(raw){ // numeric: split VEP '&'-joined values, take the max
+  if (raw == null || raw === '' || raw === '.') return '';
+  let best = null;
+  for (const part of String(raw).split('&')){
+    const v = parseFloat(part);
+    if (!isNaN(v)) best = best===null ? v : Math.max(best, v);
+  }
+  return best===null ? '' : String(best);
+}
+function vcfGt(format, sample){
+  if (!format || !sample) return '';
+  const keys = format.split(':'), vals = sample.split(':');
+  const gi = keys.indexOf('GT');
+  return gi >= 0 ? (vals[gi] || '') : '';
+}
+
+// Pick which CSQ blocks to emit for a record (all, or canonical/MANE only).
+function vcfPickBlocks(blocks, canonicalOnly){
+  if (!canonicalOnly || blocks.length <= 1) return blocks;
+  if (VCFCONV.maneIdx >= 0){
+    const mane = blocks.filter(b => (b[VCFCONV.maneIdx]||'').trim() !== '');
+    if (mane.length) return [mane[0]];
+  }
+  if (VCFCONV.canonIdx >= 0){
+    const canon = blocks.filter(b => (b[VCFCONV.canonIdx]||'').toUpperCase() === 'YES');
+    if (canon.length) return [canon[0]];
+  }
+  return [blocks[0]];
+}
+
+async function vcfFlushBatch(db, conn, tsv){
+  const fn = 'vcf_batch.tsv';
+  try { await db.dropFile(fn); } catch(e){}
+  await db.registerFileBuffer(fn, new TextEncoder().encode(tsv));
+  const colDefs = VCFCONV_COLS.map((_,i)=>`'c${i}':'VARCHAR'`).join(',');
+  const sel = VCFCONV_COLS.map(([name,type],i)=> type==='VARCHAR' ? `c${i}` : `TRY_CAST(c${i} AS ${type})`).join(', ');
+  await conn.query(
+    `INSERT INTO vcf_out SELECT ${sel} FROM read_csv('${fn}', delim='\t', header=false, ` +
+    `quote='', escape='', nullstr='', auto_detect=false, columns={${colDefs}})`);
+}
+
+async function vcfConvert(){
+  if (VCFCONV.running || !VCFCONV.file) return;
+  const file = VCFCONV.file;
+  if (file.size > 250*1024*1024 &&
+      !window.confirm('This file is large (' + (file.size/1048576).toFixed(0) + ' MB compressed). ' +
+        'In-browser conversion of a whole-genome VCF can be slow and may run out of memory. ' +
+        'For large files the CLI recipe in the README is more reliable. Continue anyway?')) return;
+
+  VCFCONV.running = true;
+  VCFCONV.abort = false;
+  VCFCONV.bytesSeen = 0;
+  const goBtn = document.getElementById('vcf-conv-go');
+  const cancelBtn = document.getElementById('vcf-conv-cancel');
+  goBtn.disabled = true; goBtn.style.opacity = '0.6';
+  if (cancelBtn) cancelBtn.style.display = 'inline-block';
+  document.getElementById('vcf-conv-result').innerHTML = '';
+  vcfConvProgress('Starting…');
+  vcfConvBar(0);
+  const onBytes = n => { VCFCONV.bytesSeen = n; };
+  const totalBytes = file.size || 0;
+  const fmtPct = () => totalBytes ? ` · ${Math.min(99, Math.round(100*VCFCONV.bytesSeen/totalBytes))}% of file` : '';
+  let t0 = 0;
+  try {
+    const mode = await vcfMode(file);
+    const mapping = vcfReadMapping();
+    const canonicalOnly = document.getElementById('vcf-conv-canonical').checked;
+    const { db, conn } = await duckdbBootstrap();
+    const colList = VCFCONV_COLS.map(([n,t])=>`${n} ${t}`).join(', ');
+    await conn.query(`CREATE OR REPLACE TABLE vcf_out (${colList})`);
+
+    const colNames = VCFCONV_COLS.map(c=>c[0]);
+    const BATCH = 20000;
+    let rows = [], rowCount = 0, recCount = 0, batch = [];
+    let inBody = false;
+    t0 = performance.now();
+
+    for await (const line of vcfLines(file, mode, onBytes)){
+      if (VCFCONV.abort) throw new Error('__cancelled__');
+      if (!inBody){
+        if (line.startsWith('#')) continue;
+        inBody = true;
+      }
+      if (!line) continue;
+      const c = line.split('\t');
+      if (c.length < 8) continue;
+      recCount++;
+      const fixed = {
+        chrom: vcfCell(c[0]), pos: vcfCell(c[1]), ref: vcfCell(c[3]), alt: vcfCell(c[4]),
+        qual: vcfNumCell(c[5]), filter: vcfCell(c[6]),
+        gt: vcfGt(c[8], c[9])
+      };
+      // CSQ blocks from INFO
+      let blocks = [];
+      const info = c[7] || '';
+      const tag = VCFCONV.csqId + '=';
+      for (const kv of info.split(';')){
+        if (kv.startsWith(tag)){
+          blocks = kv.slice(tag.length).split(',').map(b => b.split('|'));
+          break;
+        }
+      }
+      if (!blocks.length) blocks = [[]]; // emit one row even if unannotated
+      else blocks = vcfPickBlocks(blocks, canonicalOnly);
+
+      for (const blk of blocks){
+        const out = colNames.map(name => {
+          if (VCFCONV_FIXED.has(name)) return fixed[name];
+          const cfg = VCFCONV_CSQ_MAP[name], sel = mapping[name];
+          if (cfg.splice && sel.splice){
+            let best = null;
+            for (const i of VCFCONV.dsIdx){
+              for (const part of String(blk[i]||'').split('&')){
+                const v = parseFloat(part); if (!isNaN(v)) best = best===null ? v : Math.max(best, v);
+              }
+            }
+            return best===null ? '' : String(best);
+          }
+          if (sel.idx < 0) return '';
+          const raw = blk[sel.idx];
+          return cfg.num ? vcfNumCell(raw) : vcfCell(raw);
+        });
+        batch.push(out.join('\t'));
+        rowCount++;
+      }
+      if (batch.length >= BATCH){
+        await vcfFlushBatch(db, conn, batch.join('\n') + '\n');
+        batch = [];
+        const secs = (performance.now() - t0) / 1000;
+        const rate = secs > 0 ? Math.round(recCount / secs) : 0;
+        vcfConvBar(totalBytes ? VCFCONV.bytesSeen / totalBytes : 0);
+        vcfConvProgress(`Parsed ${recCount.toLocaleString()} records → ${rowCount.toLocaleString()} rows` +
+          `${fmtPct()} · ${rate.toLocaleString()} rec/s`);
+      }
+    }
+    if (batch.length) await vcfFlushBatch(db, conn, batch.join('\n') + '\n');
+
+    vcfConvBar(1);
+    vcfConvProgress(`Writing Parquet (${rowCount.toLocaleString()} rows)…`);
+    try { await db.dropFile('vcf_out.parquet'); } catch(e){}
+    await conn.query("COPY vcf_out TO 'vcf_out.parquet' (FORMAT PARQUET)");
+    const bytes = await db.copyFileToBuffer('vcf_out.parquet');
+
+    const blob = new Blob([bytes], { type:'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const sizeMB = (bytes.length/1048576).toFixed(1);
+    vcfConvProgress('');
+    vcfConvBar(null);
+    document.getElementById('vcf-conv-result').innerHTML =
+      `<span style="color:#065f46; font-weight:600;">✓ Built variants.parquet — ${rowCount.toLocaleString()} rows from ${recCount.toLocaleString()} records (${sizeMB} MB).</span> ` +
+      `<a id="vcf-conv-dl" href="${url}" download="variants.parquet" style="margin-left:10px; color:#7c3aed; font-weight:600;">⬇ Download variants.parquet</a> ` +
+      `<button id="vcf-conv-load" style="margin-left:10px; background:#7c3aed; color:#fff; border:none; padding:5px 13px; border-radius:5px; font-size:12.5px; font-weight:600; cursor:pointer;">Load into dashboard now</button>`;
+    document.getElementById('vcf-conv-load').addEventListener('click', async () => {
+      try {
+        await vcfLoadIntoDashboard(db, conn, bytes);
+        vcfConvMsg('✓ Converted data loaded into the All Variants tab.');
+      } catch(e){
+        document.getElementById('vcf-conv-result').insertAdjacentHTML('beforeend',
+          `<div style="color:#b91c1c; margin-top:6px;">Could not load: ${(e&&e.message)||e}</div>`);
+      }
+    });
+  } catch (err){
+    vcfConvProgress('');
+    vcfConvBar(null);
+    if (err && err.message === '__cancelled__'){
+      document.getElementById('vcf-conv-result').innerHTML =
+        `<div style="color:#7c2d12;">Conversion cancelled.</div>`;
+    } else {
+      document.getElementById('vcf-conv-result').innerHTML =
+        `<div style="color:#b91c1c;"><strong>Conversion failed:</strong> ${(err&&err.message)||err}` +
+        `<div style="margin-top:5px; color:#7c2d12;">If this is a bgzip whole-genome VCF that won't decompress, try <code>gunzip</code>-ing it first and feeding the plain <code>.vcf</code>, or use the CLI recipe in the README.</div></div>`;
+    }
+  } finally {
+    VCFCONV.running = false;
+    VCFCONV.abort = false;
+    goBtn.disabled = false; goBtn.style.opacity = '1';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+  }
+}
+
+// Register the freshly built Parquet and wire up the All-Variants + ClinVar tabs
+// (reuses the same path as the "load your own Parquet" upload).
+async function vcfLoadIntoDashboard(db, conn, bytes){
+  try { await db.dropFile('variants.parquet'); } catch(e){}
+  await db.registerFileBuffer('variants.parquet', bytes);
+  await conn.query("CREATE OR REPLACE VIEW variants AS SELECT * FROM read_parquet('variants.parquet')");
+  USER_DATA.variants = true;
+  markUserDataLoaded();
+  await avResetFiltersSilent();
+  await avFinish(db, conn);
+  await deriveClinvarFromVariants(conn);
+  activateTab('all_variants');
+}
+
+async function vcfPickFile(file){
+  if (!file) return;
+  VCFCONV.file = file;
+  VCFCONV.running = false;
+  document.getElementById('vcf-conv-panel').style.display = 'none';
+  document.getElementById('vcf-conv-result').innerHTML = '';
+  vcfConvProgress('');
+  vcfConvMsg(`Reading header of ${file.name}…`);
+  try {
+    const mode = await vcfMode(file);
+    const info = await vcfScanHeader(file, mode);
+    if (!info.fields.length){
+      vcfConvMsg('No VEP CSQ annotation found in this VCF header — annotate with VEP first (see README).');
+      return;
+    }
+    VCFCONV.csqId = info.csqId;
+    VCFCONV.csqFields = info.fields;
+    VCFCONV.sampleCols = info.sampleCols;
+    VCFCONV.isSV = info.hasSVTYPE;
+    Object.assign(VCFCONV, vcfDeriveSpecialIdx(info.fields));
+    vcfBuildMappingUI();
+    document.getElementById('vcf-conv-panel').style.display = 'block';
+    vcfConvMsg(`Ready — review the mapping, then click "Convert to Parquet".`);
+  } catch (err){
+    vcfConvMsg(`Could not read that file: ${(err&&err.message)||err}`);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderClinvarTable(DATA.clinvar_variants || []);
   renderRepeatList();
@@ -2133,6 +2637,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (upV) upV.addEventListener('change', e => { if (e.target.files[0]) loadUserVariants(e.target.files[0]); });
   const upS = document.getElementById('upload-svs');
   if (upS) upS.addEventListener('change', e => { if (e.target.files[0]) loadUserSvs(e.target.files[0]); });
+
+  // Wire the VEP VCF → Parquet converter (local, in-browser only).
+  const convFile = document.getElementById('vcf-conv-file');
+  if (convFile) convFile.addEventListener('change', e => { if (e.target.files[0]) vcfPickFile(e.target.files[0]); });
+  const convGo = document.getElementById('vcf-conv-go');
+  if (convGo) convGo.addEventListener('click', vcfConvert);
+  const convCancel = document.getElementById('vcf-conv-cancel');
+  if (convCancel) convCancel.addEventListener('click', () => { VCFCONV.abort = true; });
 });
 </script>
 </body>
