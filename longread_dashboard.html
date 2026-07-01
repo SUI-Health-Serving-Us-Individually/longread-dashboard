@@ -161,8 +161,8 @@
   <div id="vcf-conv-result" style="margin-top:11px;"></div>
 </div>
 <div class="nav no-print">
-  <button class="active" onclick="showSection('clinvar')">ClinVar Pathogenic</button>
-  <button onclick="showSection('all_variants')">All Variants (Full Genome)</button>
+  <button onclick="showSection('clinvar')">ClinVar Pathogenic</button>
+  <button class="active" onclick="showSection('all_variants')">All Variants (Full Genome)</button>
   <button onclick="showSection('all_svs')">All SVs (Full Genome)</button>
   <button onclick="showSection('repeats')">Repeat Expansions (TRGT)</button>
 </div>
@@ -170,7 +170,7 @@
 <div class="container">
 
 <!-- ═══════════════════════════ CLINVAR PATHOGENIC ═══════════════════════════ -->
-<div id="clinvar" class="section active">
+<div id="clinvar" class="section">
   <div class="card">
     <h2 id="clinvar-h2">ClinVar Pathogenic / Likely Pathogenic (8)</h2>
     <p style="font-size:13px; color:#718096; margin-bottom:12px;">Variants carrying pathogenic or likely-pathogenic assertions in ClinVar, reported genome-wide across all genes and conditions.</p>
@@ -232,7 +232,7 @@
   the bundled serve_dashboard.sh) — file:// won't allow the range requests
   the parquet reader needs.
 -->
-<div id="all_variants" class="section">
+<div id="all_variants" class="section active">
   <div class="card">
     <h2>All Annotated Variants — Full Genome (<span id="av-total">…</span>)</h2>
     <p style="font-size:13px; color:#718096; margin-bottom:12px;">
@@ -243,7 +243,7 @@
     </p>
 
     <div class="clinical-box info" style="font-size:12.5px; line-height:1.55; margin-bottom:12px;">
-      <strong>Why do <code>0/0</code> and <code>./.</code> rows appear?</strong>
+      <strong>Why are <code>0/0</code> and <code>./.</code> rows hidden?</strong>
       This table holds the caller's <em>complete</em> output, not just confident variant calls. A caller such as
       DeepVariant emits a record at every site it evaluated and tags each with a FILTER:
       <ul style="margin:6px 0 6px 18px; padding:0;">
@@ -252,7 +252,7 @@
         <li><strong><code>NoCall</code> → genotype <code>./.</code></strong> — too little or too ambiguous evidence to make a confident genotype.</li>
       </ul>
       <code>0/0</code> and <code>./.</code> rows are therefore <em>not</em> variants carried by this individual — they're sites the caller looked at and ruled out or couldn't resolve.<span id="av-gt-breakdown"></span>
-      Tick <strong>“Hide 0/0 and ./.”</strong> above to drop them and see only genotypes with an alternate allele. (The Zygosity → “HET or HOM” option does the same thing.)
+      They are <strong>hidden by default</strong> in this tab (the “Hide 0/0 and ./.” toggle above is on), so the table shows only genotypes with an alternate allele. Untick it to show them — useful to confirm a site is confidently reference (<code>0/0</code>) versus simply not called (<code>./.</code>) at a locus of interest. (The Zygosity → “HET or HOM” option does the same thing.)
     </div>
 
     <details style="margin:0 0 16px; font-size:12.5px; color:#4a5568;">
@@ -315,7 +315,7 @@
           </select>
         </label>
         <label>ClinVar: <input type="text" id="av-f-clin" placeholder="e.g. pathogenic" style="width:140px;"></label>
-        <label title="Hide homozygous-reference (0/0) and no-call (./.) records — see the note under the table for why these appear"><input type="checkbox" id="av-f-hide-ref"> Hide 0/0 and ./. (ref &amp; no-call)</label>
+        <label title="Hide homozygous-reference (0/0) and no-call (./.) records — they carry no alternate allele. On by default; untick to show them (e.g. to confirm a site is reference at a known locus). See the note under the table."><input type="checkbox" id="av-f-hide-ref" checked> Hide 0/0 and ./. (ref &amp; no-call)</label>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; color:#4a5568;">
         <span id="av-result-summary">—</span>
@@ -1546,7 +1546,8 @@ async function avResetFiltersSilent() {
    'av-f-csq','av-f-af-max','av-f-cadd-min','av-f-revel-min','av-f-sai-min',
    'av-f-clin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   ['av-f-impact','av-f-gt'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  const hr = document.getElementById('av-f-hide-ref'); if (hr) hr.checked = false;
+  // hide-ref is always on (disabled checkbox) — keep it checked across resets.
+  const hr = document.getElementById('av-f-hide-ref'); if (hr) hr.checked = true;
 }
 
 async function avInit() {
@@ -1794,7 +1795,7 @@ function avResetFilters() {
    'av-f-csq','av-f-af-max','av-f-cadd-min','av-f-revel-min','av-f-sai-min',
    'av-f-clin'].forEach(id => document.getElementById(id).value = '');
   ['av-f-impact','av-f-gt'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('av-f-hide-ref').checked = false;
+  document.getElementById('av-f-hide-ref').checked = true; // always on
   AV_STATE.page = 0;
   avRunQuery();
 }
@@ -2648,6 +2649,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (convGo) convGo.addEventListener('click', vcfConvert);
   const convCancel = document.getElementById('vcf-conv-cancel');
   if (convCancel) convCancel.addEventListener('click', () => { VCFCONV.abort = true; });
+
+  // All Variants is the default tab, but showSection() (which lazy-inits it) is
+  // only called on a click — so kick off avInit() once here on load.
+  if (document.getElementById('all_variants').classList.contains('active') &&
+      typeof AV_STATE !== 'undefined' && !AV_STATE.initialized && !AV_STATE.loading) {
+    avInit();
+  }
 });
 </script>
 </body>
